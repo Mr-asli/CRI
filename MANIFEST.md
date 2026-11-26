@@ -1,0 +1,77 @@
+# CRI Manifest
+
+This is the exact file inventory included in the work-in-progress archive.
+
+File count: 72
+
+- `.env.example` — SHA-256 `aa98cf2b61de9724f33a1cadff3f58650a9a7313939313b4786cdae5d01de4c4`
+- `.github/workflows/ci.yml` — SHA-256 `f40893247f0cd1197cf4802137a3e947fc37c0fe56748fc23b8fc2d05b3a0157`
+- `.github/workflows/manual-demo.yml` — SHA-256 `6d7e50db2db4dbd0d48a4dc13edf6881d32526af506018f7ded6605a93591b01`
+- `.gitignore` — SHA-256 `316204123088d7b44163f3500270b91b22047b0ec194a7e08d778d0e178f38c5`
+- `AUDIT_REPORT.md` — SHA-256 `0062a1f30bc5510a5a6b261c6c2baec0bc50b17948865050e50e921f699d0171`
+- `BASELINE_AUDIT.md` — SHA-256 `46aad2cfdf1530d3aa62266ad0a4c4367ce18cb3a473feeacf5278be94302200`
+- `BLOCKERS.md` — SHA-256 `6206f0aca85dd1df61cb7548c37dec1705dff6d47b01b7a21d32f103b2723545`
+- `CHANGELOG.md` — SHA-256 `700db14dcc697a7953477cdaec455045e53b68ae73e5b73d5aa4c34b40084494`
+- `Makefile` — SHA-256 `28020a597dcb15893165f95bf5af62addc51188f5b066b8b061a563e86b0b6b4`
+- `PHASE_REPORT.md` — SHA-256 `183363b70913fe79170e5dbeb42c36c1b9c5190ddd67814e1c011cdadbf9cb2e`
+- `README.md` — SHA-256 `eabc276c1e7cd290ba2b7a34717431df195d393c10fe25063bdbd7594f8c58d3`
+- `SECURITY_TEST_REPORT.md` — SHA-256 `2ec41acf6408626a85244b5dd8543dd84c3b98d36a35032603d8935a8bc4599d`
+- `STATUS.md` — SHA-256 `4ff602fd91ef812d1dc57ea51e620b7bdf72c53887fe344920309163367637a0`
+- `TEST_REPORT.md` — SHA-256 `bc9ee884c44eda983b695e2b233cf56c6dd3e20afd0c32fcaad42a643c2507de`
+- `backend/Dockerfile` — SHA-256 `2e64c97ff325d9ebd7faf815e309babb0641f79eddd8ea6ef967c55aeb4672af`
+- `backend/cri/__init__.py` — SHA-256 `3ddbdeeda4b1f6e84b58633630274f0eca2db1d3a38b46a85cdf21649cdc5f58`
+- `backend/cri/agents/__init__.py` — SHA-256 `d19b7cb06619623c46883c06e29b5f1d4ab01a05c9a34d6469ee9cc4b3efd4e6`
+- `backend/cri/agents/base.py` — SHA-256 `afb2c2b13ca5f0d6ca47c916a80b7b3634a92f1b2af3f836bf165881ba3a4dd7`
+- `backend/cri/agents/factory.py` — SHA-256 `ee8bcb8c4a5af27cc9ba379e4cf99401759aa7028addd1d63ea9710e22e4d3f6`
+- `backend/cri/cli.py` — SHA-256 `94a1eddac16ec17e5eb35b39c5fbc819babf499d78761680814fab68944ba86b`
+- `backend/cri/core.py` — SHA-256 `25a38bc164ac201c0f25c48eb7d1fed6c7152e32bb5104663915ef93611f5aaa`
+- `backend/cri/main.py` — SHA-256 `26d11ac7da1def4d9f1cd74b782e2934770ec9be2b28beb5a5d11d32eff7c851`
+- `backend/cri/orchestration/__init__.py` — SHA-256 `b01b279ae6b89a6f5d88cfb81e20388a60f87174d3f0e38f4ffec077ec4db80c`
+- `backend/cri/orchestration/dag.py` — SHA-256 `6bb2d76ebb6c55a210e6fab8f2e1dc18ceace641ea4b2700a0c3ceb266dae2d1`
+- `backend/cri/tools/__init__.py` — SHA-256 `4ccec0c122d50e05fe089f2dbfe1970f641bc62ce7c5f35cccc7736a42be0d76`
+- `backend/cri/tools/gateway.py` — SHA-256 `d3da2d259734a153fb54cce9455bc403ff55dac79a1c61ec79eec10e15668f90`
+- `backend/pyproject.toml` — SHA-256 `4a4599faf8ee47b7ef6ce5d991b2a76760d8ad7b0337f2882838e3d60102d11d`
+- `build_cri.sh` — SHA-256 `7fb94afd57b337ea9149fc070d006fbd39a91a417bcf70c444933b6e954ac4df`
+- `dashboard/index.html` — SHA-256 `48f4419234c1a4988ae98292b1a7f9710ab36716d25ffb5a099788564f9d3e77`
+- `dashboard/package.json` — SHA-256 `cbae72214a8dbbbb6b2bde5bd2e10b091c01d1b37ac80dac69c267eef915fb8f`
+- `dashboard/src/api.ts` — SHA-256 `5d231bbf61aaf3cc786e9e8554ce1dd4a0eb0b2479229b3343ef4769818e77c9`
+- `dashboard/src/main.tsx` — SHA-256 `fceb1da8fac961e3a987b98f7fa48ba5d2bae302b81a0b5d16bc3455e25db874`
+- `dashboard/src/pages/App.test.tsx` — SHA-256 `2ef891ff4577339507b47fc5077f21f153138469c714517063085d44cbfa2723`
+- `dashboard/src/pages/App.tsx` — SHA-256 `3cb4444f71d4491a727e278de785266683410a39dc84ab70c798deb0d67423a8`
+- `dashboard/src/style.css` — SHA-256 `bf259cf9e990ec3f0a0d9ab5e9d9b3c34903816113eac8024bb446caa8739e15`
+- `dashboard/tsconfig.json` — SHA-256 `919d9fc64f379a1fd5fba4395ad5ae64b583472706b16274fe1608878dd8a095`
+- `dashboard/vite.config.ts` — SHA-256 `3f252801b1c664173c024e2432501756c7018f4f0e02ea4d622db0f9871e52dd`
+- `docker-compose.test.yml` — SHA-256 `63b3517907d9aa71be327f4bb8172a61e9c0eff6e83cc2a3187cce95f3825ad2`
+- `docker-compose.yml` — SHA-256 `f9874e8cc6eb8539982133e421f7fbbe93f42807824375874e2f6a6c73a18bc6`
+- `docs/ADR/0001-orchestration.md` — SHA-256 `028f2691aade0bdbeca23ee539c0f1e2c91eeb325062539a491bb23742d0e604`
+- `docs/ADR/0002-sandbox.md` — SHA-256 `b8f4f04f6e1cf4d461e9603149569c5e4cc1134a8a42a8f7af1ff8323377595f`
+- `docs/ADR/0003-audit.md` — SHA-256 `f6ce9c4392f6c54d0d41e66f083a60e7866553213b81bce1ea9e5f27d972a02f`
+- `docs/ADR/0004-policy.md` — SHA-256 `9589e378f49b34d8c779d915dff75adf3f98a769f0b2d39e02f2faff34d66f28`
+- `docs/ADR/0005-memory.md` — SHA-256 `494c00e7edda852052f0b066df36438e9cfd63daf6b8487e5d7cbc7b408d8f5b`
+- `docs/AGENT_PROTOCOL.md` — SHA-256 `784493cc0e79c93a560abb3352d8961cf0fa432b5208bd120b201c53fea5d65c`
+- `docs/ARCHITECTURE.md` — SHA-256 `a65f5d8b5981e04de0d7b3a5c60389f75421dcbe3e95f437901ee0434a5056c4`
+- `docs/ASSUMPTIONS.md` — SHA-256 `6a278ad094c20bddade4059189421eb15249be4c0956baebfab8c1d87928586a`
+- `docs/BASELINE_AUDIT.md` — SHA-256 `46aad2cfdf1530d3aa62266ad0a4c4367ce18cb3a473feeacf5278be94302200`
+- `docs/BLOCKERS.md` — SHA-256 `6206f0aca85dd1df61cb7548c37dec1705dff6d47b01b7a21d32f103b2723545`
+- `docs/CHANGELOG.md` — SHA-256 `fc3ba6ace45f4eb97512c58bbd6e3689bdf27aa9e1ce84eaa7834a07f0f5a708`
+- `docs/CI.md` — SHA-256 `76afd950172347fce037b07a755de97c056d77363a28bee777d5677d10efbb95`
+- `docs/DASHBOARD.md` — SHA-256 `48a282c0a8a8586e92d3e26005494c884bc76cbae380722c0d7b4212c03ab71d`
+- `docs/DEPENDENCIES.md` — SHA-256 `81119a9c8a38093e5cc0154fe2273dccd72d13cb86da19c81984fcc33dc72101`
+- `docs/GITHUB_ACTIONS_GUIDE.md` — SHA-256 `8f0694d611d78fbd7d2ea18bf535b857db0227c7fb906fef8e8f135db81f0dad`
+- `docs/MANUAL_TEST_PLAN.md` — SHA-256 `ac2ccf5ba2466ed6bc579a3cebed056f369ce0ddeb0da1044ec6dfadb1136de1`
+- `docs/OPERATIONS.md` — SHA-256 `43db504899cc9e80e7251ae9f55502cc0981a029c6df7a5dc7b6ff9aff11288b`
+- `docs/PHASE_REPORT.md` — SHA-256 `e5990ba79abf133b479b6728ea68b47ff3b177efe8fee18556ae96ff26e5947a`
+- `docs/SECURITY.md` — SHA-256 `f24f046bb87254471a828c2812bd0faa0a0b5ea8c8f551e3862f50ee992cc429`
+- `docs/THREAT_MODEL.md` — SHA-256 `97a00431c23fbf9634173700d7d22977c9e6b9729512d3c784c2c30857945ada`
+- `infra/policies/roles.rego` — SHA-256 `4e534e2b2348ae7f1c8128799dc6de1eb1bf6bc3d74d1a6285fcb2c2cb4afe4b`
+- `scripts/backup.sh` — SHA-256 `b7e65d256029c835b4150c8d71745aa03d6f98f236b99862d6481ad577e7eded`
+- `scripts/restore.sh` — SHA-256 `dcaf782b4454096a40adc5232107f2c185dba071627fd1e1954157be4fe23ca1`
+- `scripts/run-e2e-demo.sh` — SHA-256 `3a7f3cec93dd6a1d78528632a05553c7e3c4370d943256dbcab2dcaeda04cdc9`
+- `scripts/run-kill-switch-test.sh` — SHA-256 `32c38654008a547c38ca788920196fee0765c5bc55f51fc3118e8aece2ed7054`
+- `scripts/verify-audit.sh` — SHA-256 `2748d9e84f7b2353b84c9b58e6ae6dbbab315bec42cd71c616f704035bdca49c`
+- `scripts/wait-for-healthy.sh` — SHA-256 `bf15c9fcda9be083ad579cea998d3148f8fae4bed808e033e494b01e267d04c3`
+- `tests/security/test_security_regressions.py` — SHA-256 `01acb272eea524f9db0d7f09bc678d9e5c3345eff8b605f3951968be12470e8a`
+- `tests/test_agents_orchestrator.py` — SHA-256 `edc021edfdf4beae61b5ee5fb3e4fa4776b07af1ff8ba3cec63d04ec4b988d7a`
+- `tests/test_api_security.py` — SHA-256 `138fb606fda0c0d3b8c1e2302df3c56cffbb2f64eeaa2cf982c1fceb707d463c`
+- `tests/test_core.py` — SHA-256 `1af7179d851ee0d7a9786df0745c037e622cb8fc489d6340db705d7f8d0bb9ae`
+- `tests/test_security.py` — SHA-256 `2076e6ad5afcc395c6747955dbab7180a8e756364729bc4dc647efe88ec3e993`
