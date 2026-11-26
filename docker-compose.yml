@@ -1,29 +1,102 @@
 services:
   api:
-    image: cri-api:ci
+    image: cri-api:1.0.0
     build: ./backend
-    ports:
-      - "127.0.0.1:8000:8000"
-    environment:
-      CRI_DATA_DIR: /data
-      CRI_AUDIT_FILE: /data/audit.jsonl
-      CRI_KILL_FILE: /data/KILL
-      CRI_NONCE_DB: /data/approval_nonces.sqlite3
-      CRI_ADMIN_TOKEN: ${CRI_ADMIN_TOKEN:?Set CRI_ADMIN_TOKEN in .env}
-      CRI_APPROVAL_SECRET: ${CRI_APPROVAL_SECRET:?Set CRI_APPROVAL_SECRET in .env}
-    volumes:
-      - cri-data:/data
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
+    ports: ["127.0.0.1:8000:8000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/status', timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 20
-      start_period: 10s
-    restart: unless-stopped
+      start_period: 20s
+    environment:
+      CRI_DATA_DIR: /data
+      CRI_AUDIT_FILE: /data/audit.jsonl
+      CRI_KILL_FILE: /data/KILL
+      CRI_NONCE_DB: /data/approval_nonces.sqlite3
+      CRI_ADMIN_TOKEN: ${CRI_ADMIN_TOKEN:?Set CRI_ADMIN_TOKEN}
+      CRI_APPROVAL_SECRET: ${CRI_APPROVAL_SECRET:?Set CRI_APPROVAL_SECRET}
+      CRI_DATABASE_URL: postgresql+psycopg://cri_app:${CRI_APP_PASSWORD:?Set CRI_APP_PASSWORD}@postgres:5432/cri
+      CRI_REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379/0
+      CRI_OPA_URL: http://opa:8181
+      CRI_AUDIT_REMOTE_URL: ${CRI_AUDIT_REMOTE_URL:-}
+      CRI_AUDIT_REMOTE_TOKEN: ${CRI_AUDIT_REMOTE_TOKEN:-}
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+      opa: {condition: service_healthy}
+    volumes: ["cri-data:/data"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+  dashboard:
+    image: cri-dashboard:1.0.0
+    build: ./dashboard
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on:
+      api: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: cri
+      POSTGRES_USER: cri_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cri_owner -d cri"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  migrate:
+    image: pgvector/pgvector:pg16
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        psql -v ON_ERROR_STOP=1 -h postgres -U cri_owner -d cri -f /migrations/0001_initial.sql
+        && psql -v ON_ERROR_STOP=1 -v app_password="$$CRI_APP_PASSWORD" -v database_name=cri -h postgres -U cri_owner -d cri -f /migrations/0002_runtime_role.sql
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      CRI_APP_PASSWORD: ${CRI_APP_PASSWORD:?Set CRI_APP_PASSWORD}
+    volumes:
+      - ./backend/alembic/versions/0001_initial.sql:/migrations/0001_initial.sql:ro
+      - ./backend/alembic/versions/0002_runtime_role.sql:/migrations/0002_runtime_role.sql:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+  redis:
+    image: redis:7-alpine
+    command: ["sh", "-c", "redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  opa:
+    image: openpolicyagent/opa:1.4.2
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies"]
+    volumes: ["./infra/policies:/policies:ro"]
+    healthcheck:
+      test: ["CMD", "/opa", "eval", "true"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: "no"
 volumes:
   cri-data:
+  postgres-data:
+  redis-data:

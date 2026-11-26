@@ -41,6 +41,13 @@ class Audit:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.touch(exist_ok=True)
         self.lock_path = self.path.with_suffix(self.path.suffix + ".lock")
+        self.remote_sink = None
+        self.db_writer = None
+        remote_url = os.getenv("CRI_AUDIT_REMOTE_URL")
+        remote_token = os.getenv("CRI_AUDIT_REMOTE_TOKEN", "")
+        if remote_url:
+            from .integrations.external_audit import ExternalAuditSink
+            self.remote_sink = ExternalAuditSink(remote_url, remote_token)
 
     @contextmanager
     def _locked(self):
@@ -90,6 +97,12 @@ class Audit:
                 os.chmod(self.path, 0o600)
             except OSError:
                 pass
+            if self.remote_sink is not None:
+                # Local chain remains available for diagnosis; remote sink failure
+                # is surfaced so the caller can fail closed before proceeding.
+                self.remote_sink.append(row)
+            if self.db_writer is not None:
+                self.db_writer(row)
             return row
 
     def verify(self):
@@ -99,11 +112,16 @@ class Audit:
         except (OSError, ValueError, TypeError, AttributeError, json.JSONDecodeError):
             return {"valid": False, "count": 0}
         for index, original in enumerate(rows):
+            if not isinstance(original, dict):
+                return {"valid": False, "count": index}
             row = dict(original)
             digest = row.pop("hash", None)
-            expected = hashlib.sha256(
-                json.dumps(row, sort_keys=True, separators=(",", ":")).encode()
-            ).hexdigest()
+            try:
+                expected = hashlib.sha256(
+                    json.dumps(row, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+                ).hexdigest()
+            except (TypeError, ValueError):
+                return {"valid": False, "count": index}
             if (
                 row.get("prev") != previous
                 or not isinstance(digest, str)
@@ -192,6 +210,8 @@ class Tokens:
     def __init__(self, secret, ttl=300, nonce_db="./data/approval_nonces.sqlite3"):
         if not isinstance(secret, str) or len(secret.encode()) < 32:
             raise ValueError("CRI_APPROVAL_SECRET must contain at least 32 bytes")
+        if not isinstance(ttl, int) or ttl < 1 or ttl > 3600:
+            raise ValueError("approval token TTL must be between 1 and 3600 seconds")
         self.secret = secret.encode()
         self.ttl = ttl
         self.nonce_db = str(nonce_db)
@@ -241,6 +261,8 @@ class Tokens:
             ):
                 return False
             nonce = data["n"]
+            if not isinstance(nonce, str) or len(nonce) != 32:
+                return False
             with self._connect() as db:
                 db.execute("DELETE FROM used_nonces WHERE expires_at < ?", (now,))
                 try:
@@ -258,15 +280,21 @@ class Tokens:
 class Sandbox:
     """Docker runner with strict preflight. No Docker socket is mounted into the API service."""
 
-    def __init__(self, docker_binary=None, image="python:3.12-alpine"):
+    def __init__(self, docker_binary=None, image=None):
         self.docker_binary = docker_binary or shutil.which("docker")
-        self.image = image
+        # Mutable tags are deliberately rejected: the runner must use an image
+        # pinned by immutable sha256 digest and preloaded by the host operator.
+        self.image = image or os.getenv("CRI_SANDBOX_IMAGE", "")
 
     def run(self, code):
-        if not isinstance(code, str) or len(code) > 5000:
-            raise ValueError("source too large or invalid")
+        if not isinstance(code, str) or not code.strip() or len(code.encode("utf-8")) > 5000:
+            raise ValueError("source must be non-empty UTF-8 text no larger than 5000 bytes")
         if not self.docker_binary:
             raise SandboxUnavailable("Docker CLI unavailable; execution denied")
+        digest = self.image.rsplit("@sha256:", 1)[-1] if "@sha256:" in self.image else ""
+        repository = self.image.rsplit("@sha256:", 1)[0] if digest else ""
+        if not repository or len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest.lower()):
+            raise SandboxUnavailable("sandbox image must be pinned by immutable sha256 digest; execution denied")
         try:
             health = subprocess.run(
                 [self.docker_binary, "info"],
@@ -290,6 +318,7 @@ class Sandbox:
                 self.docker_binary,
                 "run",
                 "--rm",
+                "--pull=never",
                 "--network=none",
                 "--read-only",
                 "--cap-drop=ALL",
@@ -349,20 +378,66 @@ class Workflow:
     def __init__(self, audit, policy, kill, tokens, sandbox):
         self.a, self.p, self.k, self.t, self.s = audit, policy, kill, tokens, sandbox
         self.items = {}
+        self.repository = None
+
+    def _persist(self, proposal):
+        if self.repository is not None:
+            # Persist the complete reviewable proposal so API restarts do not
+            # leave database tasks that cannot be tested or approved.
+            data = {
+                "filename": proposal.get("filename"),
+                "code_sha256": proposal.get("code_sha256"),
+                "code": proposal.get("code"),
+                "test": proposal.get("test"),
+            }
+            self.repository.save_task(
+                proposal["id"], proposal["goal"], proposal["status"], data
+            )
+
+    def restore(self):
+        """Rehydrate workflow state from durable storage during API startup."""
+        if self.repository is None:
+            return 0
+        restored = 0
+        list_tasks = getattr(self.repository, "list_tasks", None)
+        if not callable(list_tasks):
+            return 0
+        for row in list_tasks(limit=500):
+            data = row.proposal or {}
+            code = data.get("code")
+            if not isinstance(code, str) or not code:
+                # Legacy rows without source are visible but cannot be executed.
+                continue
+            self.items[row.id] = {
+                "id": row.id,
+                "goal": row.goal,
+                "filename": data.get("filename", "proposal.py"),
+                "code_sha256": data.get("code_sha256"),
+                "code": code,
+                "status": row.status,
+                "test": data.get("test"),
+            }
+            restored += 1
+        return restored
 
     def create(self, goal):
         self.k.check()
         self.p.check(self.p.identity("master", "master"), "propose")
         pid = uuid.uuid4().hex
-        code = "print('CRI sandbox check passed')\n"
+        from .agents.developer import Developer
+        draft = Developer().generate(goal)
+        code = draft.content
         self.items[pid] = {
             "id": pid,
             "goal": goal,
+            "filename": draft.filename,
+            "code_sha256": draft.sha256,
             "code": code,
             "status": "pending",
             "test": None,
         }
         self.a.add("proposal.created", "master", {"id": pid})
+        self._persist(self.items[pid])
         return dict(self.items[pid])
 
     def issue_human_token(self, pid):
@@ -377,6 +452,8 @@ class Workflow:
     def test(self, pid):
         self.k.check()
         proposal = self.items[pid]
+        if proposal["status"] not in ("pending", "failed", "sandbox_unavailable"):
+            raise Denied("proposal state does not permit testing")
         try:
             result = self.s.run(proposal["code"])
         except SandboxUnavailable as exc:
@@ -385,22 +462,27 @@ class Workflow:
             self.a.add(
                 "sandbox.unavailable", "testing", {"id": pid, "reason": str(exc)}
             )
+            self._persist(proposal)
             raise
         except Exception as exc:
             proposal["status"] = "failed"
             proposal["test"] = {"error": str(exc)}
             self.a.add("test.failed", "testing", {"id": pid, "reason": str(exc)})
+            self._persist(proposal)
             raise
         proposal["test"] = result
         proposal["status"] = "tested" if result["returncode"] == 0 else "failed"
         self.a.add(
             "test.finished", "testing", {"id": pid, "status": proposal["status"]}
         )
+        self._persist(proposal)
         return result
 
     def decide(self, pid, decision, reason, token):
         self.k.check()
         proposal = self.items[pid]
+        if not isinstance(reason, str) or not reason.strip() or len(reason) > 500:
+            raise ValueError("approval reason must contain 1 to 500 characters")
         if (
             proposal["status"] != "tested"
             or decision not in ("approve", "reject")
@@ -414,4 +496,5 @@ class Workflow:
             "human",
             {"id": pid, "decision": decision, "reason": reason},
         )
+        self._persist(proposal)
         return proposal

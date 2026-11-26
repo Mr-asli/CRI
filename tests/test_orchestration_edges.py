@@ -71,3 +71,31 @@ def test_failed_dependency_prevents_dependent_execution():
         asyncio.run(Orchestrator().run(nodes))
 
     assert executed == []
+
+
+def test_node_rejects_invalid_execution_parameters():
+    async def noop():
+        return None
+
+    with pytest.raises(ValueError, match="retries"):
+        Node("x", noop, retries=-1)
+    with pytest.raises(ValueError, match="timeout"):
+        Node("x", noop, timeout=0)
+    with pytest.raises(ValueError, match="callable"):
+        Node("x", None)
+
+
+def test_orchestrator_rejects_invalid_limits():
+    with pytest.raises(ValueError, match="max_concurrency"):
+        Orchestrator(max_concurrency=129)
+    with pytest.raises(ValueError, match="backoff"):
+        Orchestrator(backoff=-1)
+
+
+def test_empty_dag_returns_empty_result():
+    assert asyncio.run(Orchestrator().run([])) == {}
+
+
+def test_orchestrator_rejects_non_node_entries():
+    with pytest.raises(ValueError, match="Node instances"):
+        asyncio.run(Orchestrator().run([object()]))

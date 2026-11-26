@@ -1,28 +1,28 @@
-# Blockers and verification boundaries
+# Blockers and external verification requirements
 
-| # | Blocker | Reason | What CI can test | Prerequisite / status |
-|---|---|---|---|---|
-| 1 | Docker absent in local runtime | No Docker CLI/Engine | Compose startup, API image, smoke E2E, sandbox behavior | GitHub-hosted Ubuntu runner; not yet run |
-| 2 | PostgreSQL/Redis/pgvector not connected to application repositories | Current application persistence remains local JSONL/SQLite/in-memory | Current CI only starts services and health-checks them | Implement DB/repository integration and migrations before claiming connected persistence |
-| 3 | gVisor/Firecracker | Require compatible host runtime; Firecracker needs KVM and `/dev/kvm` | Fail-Closed behavior only on standard runner | Self-hosted Linux runner with KVM; not available here |
-| 4 | ruff/mypy unavailable locally | Not installed and package registry timed out | Workflow installs and runs them | GitHub Actions execution pending |
-| 5 | GitHub workflows not executed | No remote repository credentials or Actions execution context | Full configured jobs | User pushes private repository and runs Actions |
-| 6 | Full chaos/E2E | Requires Docker and multiple services | Compose smoke path only; no full distributed chaos suite yet | GitHub Docker runner; chaos suite remains future work |
-| 7 | Dashboard feature pages incomplete | Local npm install timed out; only shell and Overview live status implemented | CI attempts lint/test/build | Successful npm install and implementation of each feature page |
-| 8 | External policy authority | Rego policy file exists, but API still uses in-process Policy | Unit policy tests; OPA integration not configured | OPA service + decision client + integration tests |
-| 9 | Independent watchdog / kill control | Current kill latch is local file | Unit/API latch tests | Separate supervisor/control plane |
-| 10 | PostgreSQL WORM audit | Current audit is local hash-chained JSONL | Tamper-detection unit tests | External append-only/WORM store |
-| 11 | Security branch coverage 100% | Current total branch coverage below 100% | Coverage artifact | Additional test branches and actual infrastructure |
+| Area | Code included | Local verification | Remaining gate |
+|---|---|---|---|
+| PostgreSQL / SQLAlchemy | Models, repository, migrations, runtime role | SQLite unit tests only | Run pgvector migration and API integration job on GitHub Actions |
+| Redis | TTL adapter and startup ping | Mock unit tests only | Run Redis integration on GitHub Actions |
+| OPA | HTTP client, fail-closed wrapper, Rego policy | Mock unit tests only | Start OPA, evaluate Rego and API decisions in CI |
+| Audit immutability | Local hash chain, PostgreSQL append-only trigger, optional HTTPS forwarder | Hash-chain tests; remote sink mocked | Separate DB owner/runtime role, WORM collector and retention test |
+| Host watchdog | systemd unit + root-only stop/start scripts | subprocess mocked | Install/test on dedicated Linux host; verify API/agent cannot write state or call systemctl |
+| Docker sandbox | Docker CLI runner, digest pinning, no-network/read-only/caps/resource limits | Not executed; fail-closed | Dedicated remote sandbox worker/host; do not mount Docker socket into API |
+| Developer | Deterministic source draft template | Unit test compiles generated draft | Replace template with reviewed model/code-generation provider behind policy gateway |
+| Self-improvement | Stage machine + signed one-time approval | Unit test | Add durable workflow storage, discovery worker, security review implementation and signed-token issuance UI |
+| Dashboard | React source, Nginx proxy, Dockerfile | Not built locally | npm/Vitest/TypeScript/Docker build in CI and browser/device acceptance tests |
+| Full CI | Workflow jobs authored | YAML/shell syntax only | Push repository, configure secrets, run Actions and inspect artifacts |
 
-The local environment has no Docker CLI, PostgreSQL, Redis server, OPA, or KVM-backed runtime. The project remains fail-closed when Docker sandbox execution is unavailable. GitHub CI has been prepared but has not been executed, so no GitHub result is claimed.
+## Required GitHub Actions secrets for full Compose E2E
 
-**gVisor/Firecracker:** real isolation tests are not possible on a standard GitHub Actions runner without the required runtime privileges / KVM. Fail-Closed remains active until a dedicated self-hosted runner is configured. Do not treat PRoot as a security boundary.
+- `CRI_ADMIN_TOKEN` — at least 32 random bytes.
+- `APPROVAL_SIGNING_KEY` — independent random secret, at least 32 bytes.
+- `CRI_POSTGRES_PASSWORD` — strong database owner password.
+- `CRI_APP_PASSWORD` — separate runtime database password.
+- `CRI_REDIS_PASSWORD` — strong Redis password.
 
-## Command verification on this host
+Never use the same secret for admin authentication, approval signing, PostgreSQL, and Redis.
 
-- `make test`: passed (30 tests).
-- `make audit`: passed (empty local chain valid, count 0).
-- `make e2e`: first refused because required `CRI_ADMIN_TOKEN` was not configured; rerun with temporary test secrets reached the script and failed because `docker` is not installed.
-- `make up` / `make reset`: not runnable because Docker CLI is absent.
-- `make kill`: requires a running API and configured admin token; no Docker-backed API was available.
-- Dashboard `npm install`: timed out while contacting package registry; dashboard lint/test/build were not run locally.
+## Explicit safety boundary
+
+The host watchdog is an external supervisor template, not a privilege boundary until installed by a host administrator. The API kill endpoint does not have host-level privileges. Do not mount `/var/run/docker.sock` into the API container. Untrusted code execution remains disabled unless a dedicated sandbox host/provider has been independently tested.

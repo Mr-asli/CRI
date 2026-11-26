@@ -1,0 +1,19 @@
+[Unit]
+Description=CRI independent host watchdog
+After=local-fs.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /opt/cri/scripts/host-watchdog.py --state-file /var/lib/cri-supervisor/STOP
+Restart=on-failure
+RestartSec=1
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cri-supervisor
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

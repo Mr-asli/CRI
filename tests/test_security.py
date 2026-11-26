@@ -119,3 +119,9 @@ def test_local_backup_and_restore_scripts(tmp_path):
         check=True,
     )
     assert (target / "audit.jsonl").read_text() == "sample-audit\n"
+
+
+def test_sandbox_rejects_mutable_image_tag():
+    sandbox = Sandbox(docker_binary="/fake/docker", image="python:3.12-alpine")
+    with pytest.raises(SandboxUnavailable, match="sha256 digest"):
+        sandbox.run("print('no run')")

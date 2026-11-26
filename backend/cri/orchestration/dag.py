@@ -13,9 +13,23 @@ class Node:
     retries: int = 0
     timeout: float = 10.0
 
+    def __post_init__(self):
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError("node name must be a non-empty string")
+        if not callable(self.run):
+            raise ValueError("node run must be callable")
+        if not isinstance(self.depends_on, tuple) or any(not isinstance(x, str) for x in self.depends_on):
+            raise ValueError("depends_on must be a tuple of node names")
+        if not isinstance(self.retries, int) or self.retries < 0 or self.retries > 10:
+            raise ValueError("retries must be between 0 and 10")
+        if not isinstance(self.timeout, (int, float)) or self.timeout <= 0:
+            raise ValueError("timeout must be positive")
+
 
 class CircuitBreaker:
     def __init__(self, threshold=3):
+        if not isinstance(threshold, int) or threshold < 1:
+            raise ValueError("circuit breaker threshold must be positive")
         self.threshold, self.failures, self.open = threshold, 0, False
 
     def success(self):
@@ -29,12 +43,18 @@ class CircuitBreaker:
 
 class Orchestrator:
     def __init__(self, max_concurrency=4, backoff=0.01):
-        if max_concurrency < 1:
-            raise ValueError("max_concurrency must be positive")
+        if not isinstance(max_concurrency, int) or max_concurrency < 1 or max_concurrency > 128:
+            raise ValueError("max_concurrency must be between 1 and 128")
+        if not isinstance(backoff, (int, float)) or backoff < 0 or backoff > 60:
+            raise ValueError("backoff must be between 0 and 60 seconds")
         self.max_concurrency, self.backoff = max_concurrency, backoff
         self.breaker = CircuitBreaker()
 
     def _validate(self, nodes):
+        if not nodes:
+            return {}
+        if any(not isinstance(node, Node) for node in nodes):
+            raise ValueError("all workflow entries must be Node instances")
         by_name = {n.name: n for n in nodes}
         if len(by_name) != len(nodes):
             raise ValueError("duplicate node")

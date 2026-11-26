@@ -66,3 +66,47 @@ def test_promotion_requires_separate_human_token(tmp_path):
         workflow.decide(proposal["id"], "approve", "reviewed", human_token)["status"]
         == "promoted"
     )
+
+
+def test_approval_token_ttl_must_be_bounded():
+    with pytest.raises(ValueError, match="TTL"):
+        Tokens("s" * 32, ttl=0)
+    with pytest.raises(ValueError, match="TTL"):
+        Tokens("s" * 32, ttl=3601)
+
+
+def test_promoted_proposal_cannot_be_tested_again(tmp_path):
+    audit = Audit(tmp_path / "audit.jsonl")
+    policy = Policy(audit)
+    tokens = Tokens("r" * 32, nonce_db=tmp_path / "nonces.sqlite")
+    workflow = Workflow(audit, policy, Kill(tmp_path / "KILL"), tokens, FakeSandbox())
+    proposal = workflow.create("bounded proposal")
+    workflow.test(proposal["id"])
+    token = workflow.issue_human_token(proposal["id"])
+    workflow.decide(proposal["id"], "approve", "reviewed", token)
+    with pytest.raises(Denied, match="state"):
+        workflow.test(proposal["id"])
+
+
+def test_approval_reason_is_required(tmp_path):
+    audit = Audit(tmp_path / "audit.jsonl")
+    policy = Policy(audit)
+    tokens = Tokens("r" * 32, nonce_db=tmp_path / "nonces.sqlite")
+    workflow = Workflow(audit, policy, Kill(tmp_path / "KILL"), tokens, FakeSandbox())
+    proposal = workflow.create("bounded proposal")
+    workflow.test(proposal["id"])
+    token = workflow.issue_human_token(proposal["id"])
+    with pytest.raises(ValueError, match="reason"):
+        workflow.decide(proposal["id"], "approve", "", token)
+
+
+def test_audit_verify_handles_non_object_json_records(tmp_path):
+    path = tmp_path / "audit.jsonl"
+    path.write_text('["not", "an", "event"]\n', encoding="utf-8")
+    assert Audit(path).verify() == {"valid": False, "count": 0}
+
+
+def test_audit_verify_rejects_non_finite_numbers(tmp_path):
+    path = tmp_path / "audit.jsonl"
+    path.write_text('{"event":"x","actor":"a","details":{"n":NaN},"prev":"' + "0" * 64 + '","time":1,"hash":"bad"}\n', encoding="utf-8")
+    assert Audit(path).verify() == {"valid": False, "count": 0}

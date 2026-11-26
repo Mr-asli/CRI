@@ -1,46 +1,40 @@
-# CRI v1.0 pre-GitHub — status
+# CRI status — final implementation package v1.0
 
-**Internal/private development snapshot. Not production-ready.**
+## Implemented in this package
 
-## Implemented in this snapshot
+- SQLAlchemy 2.x models and repository boundaries for tasks, audit events, memory records, and optional pgvector embeddings.
+- PostgreSQL 16 + pgvector schema migrations (`0001_initial.sql`, `0002_runtime_role.sql`). The runtime role is separate from the migration/database owner; its audit table grants are INSERT/SELECT only and a database trigger rejects UPDATE/DELETE.
+- Redis TTL storage adapter and startup connectivity check when `CRI_REDIS_URL` is configured.
+- OPA HTTP decision client, fail-closed behavior, Rego authorization policy, and integration with API admin access and agent policy checks when `CRI_OPA_URL` is configured.
+- Optional HTTPS remote audit forwarder. The receiving service must provide independently enforced WORM/append-only retention.
+- Deterministic Developer draft generator; generated source is a reviewable template, not an unrestricted code-writing model.
+- Self-improvement state machine with security, sandbox, test, comparison, and one-time signed human approval gates.
+- Docker CLI sandbox runner remains fail-closed: requires an available Docker Engine and an operator-pinned immutable image digest; no Docker socket is mounted into the API container.
+- Host watchdog and systemd unit templates. The host-level stop request is created by a root operator outside the API/agent process. Host-level start is also root-operator-only.
+- Responsive React dashboard source, Nginx reverse proxy configuration, and production dashboard Dockerfile.
+- Docker Compose topology for API, dashboard, PostgreSQL/pgvector, Redis, OPA, and one-shot migrations.
+- GitHub Actions workflow for Python tests/coverage, infrastructure migration checks, OPA policy evaluation, compose E2E, and dashboard typecheck/test/build/container build.
 
-- Python control-plane API with bearer authentication on sensitive routes.
-- Local hash-chained JSONL audit and verification CLI.
-- HMAC-signed, expiring, one-time approval tokens with SQLite nonce replay protection.
-- Role/scope policy prototype with child-scope intersection and deny-by-default checks.
-- Docker sandbox command with restrictive runtime flags and fail-closed preflight; actual Docker execution has not been tested in this environment.
-- Six role-specific agent classes with task lifecycle, bounded behavior, audit integration, and factory enforcement of child scope intersection.
-- ToolGateway with identity/policy/resource validation, kill latch check, bounded payload/result checks, and audit event.
-- Async DAG orchestrator with dependency validation, bounded concurrency, retry/backoff, timeout and circuit-breaker behavior.
-- React/TypeScript/Vite dashboard shell with 11 navigation areas, responsive layout, theme toggle, live status polling and explicit disconnected state.
-- Private GitHub Actions workflows, Compose test topology, scripts, and operational documentation.
+**Required status statement:** «موارد باقی‌مانده در محیط محلی (Docker/DB) نوشته شده‌اند و آماده اجرا در GitHub Actions هستند.»
 
-## Still incomplete / not proven
+This statement means the integration code and CI jobs are included. It does **not** mean those infrastructure jobs have already passed: this environment did not execute Docker Compose, PostgreSQL, Redis, OPA, or npm container builds.
 
-- Dashboard only has a functional Overview status view. The other ten pages are explicit shells; detailed controls, live charts, approval center, logs, policy management, memory snapshots and independent kill UX are not implemented.
-- PostgreSQL/Redis/pgvector services are defined for CI, but application repositories and migrations are not connected to them.
-- OPA Rego policy is present as a policy artifact; runtime authorization still uses in-process Python policy.
-- Audit is local JSONL, not PostgreSQL/WORM immutable storage.
-- Kill switch is a local file latch, not an independent watchdog/controller.
-- No distributed persistent Orchestrator queue, version registry, rollback engine, or full autonomous LLM workflow.
-- Docker was unavailable locally; Docker sandbox, Compose, and E2E have not been run. GitHub Actions workflows have not yet been executed.
-- gVisor/Firecracker require a compatible dedicated runner; Firecracker requires KVM and `/dev/kvm`.
-- Python line/branch coverage is below 100%; latest observed total is 88% (coverage.py branch mode).
+## Local verification performed
 
-## How to test on GitHub
+- Python tests: 70 passed.
+- Backend statement coverage: 85% (measured locally with coverage.py; CI threshold: 85%).
+- Python compileall: passed.
+- YAML parse of both Compose files and CI workflow: passed.
+- Shell syntax checks for workflow run blocks: passed.
 
-Follow `docs/GITHUB_ACTIONS_GUIDE.md`. Configure the required repository secrets, upload the extracted `cri/` contents to a private repository, then run `CRI Internal CI` or `CRI Manual Docker Demo` from Actions. Interpret each job according to `docs/CI.md`; green service health checks do not prove backend persistence integration.
+## Not certified / remaining deployment work
 
-## Release classification
+- GitHub Actions has not been run from this environment; repository secrets and a real runner are required.
+- Dashboard npm install was attempted but could not complete in this environment; Vitest, TypeScript build, and Docker build therefore remain unverified.
+- Docker sandbox execution was not run. The API container intentionally has no Docker socket; a dedicated remote sandbox worker/host with a restricted, authenticated execution API is required before enabling untrusted-code execution.
+- Host watchdog/systemd units are templates and must be installed and tested on a dedicated Linux host. The current API Kill Switch is an application admission latch; it is not wired to the privileged host stop file. The root operator stop script is the independent host control path.
+- A remote audit collector is optional and must be configured with `CRI_AUDIT_REMOTE_URL` and `CRI_AUDIT_REMOTE_TOKEN`; its server-side WORM guarantees require separate verification.
+- Human approval is authenticated by a one-time HMAC token in the workflow; production signing-key custody/rotation should move to a dedicated KMS/HSM.
+- Full agent autonomy, model-provider integration, continuous self-improvement discovery, distributed queues, chaos tests, and gVisor/Firecracker isolation are not certified as production-ready.
 
-This is `cri-v1.0-pre-github.zip`, a pre-GitHub engineering snapshot. It is not `cri-final-v1.0.zip`, not a completed 13-phase release, and not certified against all 18 acceptance criteria.
-
-## Latest local verification
-
-- `PYTHONPATH=backend pytest -q`: 30 passed.
-- Branch-mode coverage.py report: 88% total.
-- `python -m compileall -q backend`: passed.
-- Shell syntax checks and YAML parsing for both workflows and both Compose files: passed.
-- `make test` and `make audit`: passed.
-- `make e2e`: blocked by missing Docker after the required-secret guard was satisfied with temporary test-only values.
-- `npm install`: timed out; dashboard build remains unverified.
+CRI must remain in supervised development mode until these deployment gates are verified.

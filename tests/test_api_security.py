@@ -136,3 +136,57 @@ def test_agent_execution_requires_admin_and_runs_real_agent(monkeypatch, tmp_pat
             client.post("/api/agents/nope/run", headers=headers, json={}).status_code
             == 404
         )
+
+
+def test_tasks_list_requires_admin_and_returns_proposals(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    headers = {"Authorization": "Bearer " + "a" * 32}
+    with TestClient(main.app) as client:
+        assert client.get("/api/tasks").status_code == 401
+        created = client.post(
+            "/api/tasks", headers=headers, json={"goal": "list task proposals"}
+        )
+        assert created.status_code == 200
+        listed = client.get("/api/tasks", headers=headers)
+        assert listed.status_code == 200
+        assert listed.json()[0]["id"] == created.json()["id"]
+
+
+def test_kill_latch_blocks_agent_execution(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    headers = {"Authorization": "Bearer " + "a" * 32}
+    with TestClient(main.app) as client:
+        assert client.post("/api/kill", headers=headers).status_code == 200
+        denied = client.post(
+            "/api/agents/master/run",
+            headers=headers,
+            json={"goal": "must remain blocked"},
+        )
+        assert denied.status_code == 423
+        assert client.get("/api/status").json()["status"] == "stopped"
+
+
+def test_status_reports_admission_latch_not_false_running_state(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    with TestClient(main.app) as client:
+        status = client.get("/api/status").json()
+        assert status["status"] == "enabled"
+        assert status["control_plane"] == "reachable"
+        assert status["execution_guarantee"] == "not_independently_supervised"
+        assert status["sandbox"] == "unavailable"
+
+
+def test_invalid_proposal_ids_fail_as_not_found(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    headers = {"Authorization": "Bearer " + "a" * 32}
+    with TestClient(main.app) as client:
+        assert client.post("/api/tasks/not-a-uuid/test", headers=headers).status_code == 404
+        assert client.post("/api/approvals/token/not-a-uuid", headers=headers).status_code == 404
+
+
+def test_agent_payload_size_is_bounded(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    headers = {"Authorization": "Bearer " + "a" * 32}
+    with TestClient(main.app) as client:
+        response = client.post("/api/agents/master/run", headers=headers, json={"goal": "x" * 12000})
+        assert response.status_code == 422

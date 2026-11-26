@@ -2,7 +2,7 @@
 
 ## Current security posture
 
-This is a pre-GitHub prototype, not a production security boundary. Sensitive API endpoints use a static bearer token supplied through environment variables (minimum 32 bytes); JWT/session, CSRF, rate limiting and multi-user RBAC are not implemented. The in-process Policy class is deny-by-default but is not an independent OPA authority. Audit is local JSONL with a SHA-256 hash chain; privileged host access can alter/delete the entire file. Kill is a file latch, not an independent watchdog. Approval tokens use HMAC, expiry and SQLite nonce replay prevention. Memory is in-process. Docker sandbox execution is fail-closed when Docker is absent, but runtime isolation has not been exercised in this environment.
+This is a pre-GitHub prototype, not a production security boundary. Sensitive API endpoints use a static bearer token supplied through environment variables (minimum 32 bytes); JWT/session, CSRF, rate limiting and multi-user RBAC are not implemented. The in-process Policy class is deny-by-default but is not an independent OPA authority. Audit is local JSONL with a SHA-256 hash chain; privileged host access can alter/delete the entire file. Kill is a file latch, not an independent watchdog. Approval tokens use HMAC, expiry and SQLite nonce replay prevention. Memory is in-process. Docker sandbox execution is fail-closed when Docker is absent and now requires an immutable `sha256` image digest with `--pull=never`; runtime isolation has not been exercised in this environment.
 
 ## Threat model
 

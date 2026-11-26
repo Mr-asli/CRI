@@ -1,35 +1,37 @@
-# CRI acceptance audit — pre-GitHub snapshot
+# CRI final code audit — v1.0 package
 
-Statuses are evidence-based. “Proven locally” means only the specific local test/implementation, not production isolation.
+## Scope
 
-| # | Acceptance area | Status | Evidence / gap | Proof stage |
-|---|---|---|---|---|
-| 1 | API authentication | Proven locally (limited) | `backend/cri/main.py`; `test_sensitive_routes_require_bearer`; static bearer secret, no JWT/session | Local |
-| 2 | No Docker socket in API | Proven by config inspection | `docker-compose.yml`; no socket mount | Local inspection |
-| 3 | No default approval key | Proven locally | `Tokens` validates 32+ bytes; startup secret test | Local |
-| 4 | Real sandbox isolation | Unproven | Docker flags exist; Docker unavailable, no runtime test | GitHub Docker runner |
-| 5 | Fail-Closed without sandbox | Proven locally | `test_sandbox_absence_fails_closed`, `test_unavailable_sandbox_prevents_approval_token` | Local |
-| 6 | Independent OPA policy authority | Unproven | `infra/policies/roles.rego` exists; API still in-process Policy | Future integration |
-| 7 | RBAC/ABAC resource scope | Partial | role/scope policy and ToolGateway resource gate; no full ABAC attributes | Local + future |
-| 8 | Independent immutable audit | Unproven | local JSONL hash chain only; no WORM/Postgres | Future infrastructure |
-| 9 | Kill switch independent from agents | Partial | file latch blocks API workflow; no independent watchdog | Future infrastructure |
-| 10 | Human approval one-time anti-replay | Proven locally (limited) | HMAC, TTL, SQLite nonce; tests cover replay/expiry | Local |
-| 11 | AgentFactory child <= parent | Proven locally for implemented factory | scope intersection test | Local |
-| 12 | Six agent role implementations | Partial | six bounded role classes and authenticated run endpoint; no LLM connector/long-running workers | Local |
-| 13 | DAG orchestration | Partial | async DAG, concurrency, retry, timeout, breaker; in-process only | Local |
-| 14 | ToolGateway mandatory path | Partial | policy/resource/kill/audit checks; only narrow memory tool registered | Local |
-| 15 | Self-improvement 16-state lifecycle | Unproven | existing proposal workflow is minimal; no full state machine | Future |
-| 16 | PostgreSQL/Redis/pgvector persistence | Unproven | Compose services defined, no app repository/migrations | GitHub + implementation |
-| 17 | Professional 11-page dashboard | Partial | 11-area navigation; Overview live status; other pages are shells | GitHub build + future UI work |
-| 18 | Complete CI/chaos/E2E/operations | Partial | workflows/scripts/docs exist; Actions not run; E2E is smoke only | GitHub + future |
+Reviewed backend API/core/agents/orchestration/tools, database adapters/models/migrations, OPA policy client and Rego, Redis adapter, audit forwarder, Docker sandbox, host watchdog/systemd templates, Compose files, CI workflow, dashboard Docker packaging, and test suite.
 
-## A–F audit summary
+## Corrections and additions
 
-- **A — Source/config review:** no Docker socket mount; secrets are env-only; workflow secrets referenced through GitHub Secrets. Remaining static bearer auth and local state are documented.
-- **B — Identity/policy:** role allowlists and child-scope intersection tested; external OPA authority and full ABAC remain open.
-- **C — Audit/approval:** hash chain, HMAC token, expiry and replay checks tested; WORM storage and independent human approval service remain open.
-- **D — Sandbox/isolation:** fail-closed absence path tested; actual Docker runtime and seccomp behavior not run locally.
-- **E — Agents/orchestration/dashboard:** six agent classes, DAG and ToolGateway have unit tests; distributed workers and detailed dashboard pages remain incomplete.
-- **F — Build/test/operations:** 30 Python tests pass; branch-mode coverage 88%; Docker, npm install and GitHub Actions not verified. No clean A–F release gate.
+1. Added SQLAlchemy models and repository layer for tasks, audit events, memory records, and pgvector embeddings.
+2. Added PostgreSQL migrations, append-only audit trigger, and separate runtime role grants. The runtime DB role does not receive audit UPDATE/DELETE/TRUNCATE privileges.
+3. Connected configured PostgreSQL, Redis, and OPA services to application startup; configured dependency failures fail startup closed. Task and memory operations use the repository when PostgreSQL is configured.
+4. Connected OPA decisions to human API access and agent policy checks; OPA outages deny access.
+5. Added optional HTTPS remote audit forwarding and PostgreSQL audit persistence.
+6. Added deterministic Developer draft generation and integrated it into proposal creation.
+7. Added a self-improvement stage machine with evidence gates and one-time signed token validation for promotion.
+8. Added host-side systemd watchdog and root-only stop/start operator scripts.
+9. Added dashboard Dockerfile and Nginx `/api` reverse proxy; added dashboard service to Compose.
+10. Reworked CI to run unit/coverage, PostgreSQL migration/pgvector checks, OPA policy evaluation, Compose E2E, and dashboard checks.
 
-No CRITICAL/MAJOR/MINOR-free final certification is claimed. This is a pre-GitHub engineering snapshot.
+## Verification
+
+- 70 local tests passed.
+- 86% backend statement coverage.
+- Python compilation and YAML/shell syntax checks passed.
+
+## Findings / limitations
+
+- No actual Docker, PostgreSQL, Redis, OPA server, npm build, or GitHub Actions execution was available here. The integration jobs are authored but unverified in a real runner.
+- Docker sandbox code is present and fail-closed but the API container has no Docker daemon socket by design. A dedicated remote sandbox worker with authenticated, narrowly scoped execution API is still required.
+- The host watchdog requires root installation on the target host. It is deliberately not callable by agents or the API. The API `/api/kill` endpoint only sets the application latch; the root host stop script is a separate host-level control path and is not yet connected to the dashboard button.
+- The optional remote audit receiver must enforce WORM/append-only retention independently. A hash chain alone is tamper-evident, not immutable against a privileged host administrator.
+- The self-improvement state machine is a gated workflow primitive, not a fully autonomous discovery/model-driven improvement service.
+- Dashboard source and packaging are present, but visual/browser and npm tests await CI.
+
+## Release decision
+
+**Implementation package ready for GitHub Actions validation; not certified production-ready.** Do not enable unattended agent execution until sandbox isolation, host supervisor installation, external audit retention, secrets management, and full CI are verified.

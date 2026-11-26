@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 from cri.core import Identity
+from .developer import Developer
 
 
 @dataclass
@@ -22,7 +23,14 @@ class Agent(ABC):
         self.history: list[AgentResult] = []
 
     def execute(self, task_id: str, payload: dict[str, Any]) -> AgentResult:
-        result = AgentResult(self.role, task_id, "completed", self.run(payload))
+        if not isinstance(task_id, str) or not task_id or len(task_id) > 128:
+            raise ValueError("task_id must contain 1 to 128 characters")
+        if not isinstance(payload, dict) or len(repr(payload).encode("utf-8")) > 10000:
+            raise ValueError("agent payload must be an object no larger than 10 KB")
+        output = self.run(payload)
+        if not isinstance(output, dict):
+            raise TypeError("agent output must be an object")
+        result = AgentResult(self.role, task_id, "completed", output)
         self.history.append(result)
         return result
 
@@ -48,9 +56,12 @@ class DeveloperAgent(Agent):
     role = "developer"
 
     def run(self, payload):
+        draft = Developer().generate(str(payload.get("specification", ""))[:4000], payload.get("filename", "generated_module.py"))
         return {
-            "proposal": str(payload.get("specification", ""))[:4000],
-            "status": "draft",
+            "proposal": draft.content,
+            "filename": draft.filename,
+            "sha256": draft.sha256,
+            "status": draft.status,
             "promotion": "forbidden_without_human_approval",
         }
 

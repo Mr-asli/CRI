@@ -1,10 +1,26 @@
 [project]
-name="cri-prototype"
-version="0.1.0"
-requires-python=">=3.11"
-dependencies=["fastapi==0.115.12","uvicorn[standard]==0.34.2","pydantic==2.11.4"]
+name = "cri-prototype"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.115.12",
+  "uvicorn[standard]==0.34.2",
+  "pydantic==2.11.4",
+  "SQLAlchemy==2.0.50",
+  "psycopg[binary]==3.2.6",
+  "pgvector==0.4.1",
+  "redis==5.2.1",
+]
+
 [project.optional-dependencies]
-test=["pytest==8.3.5","httpx==0.28.1","hypothesis==6.131.9","coverage==7.8.0"]
+test = ["pytest==8.3.5", "httpx==0.28.1", "hypothesis==6.131.9", "coverage==7.8.0"]
 
 [project.scripts]
 cri-audit = "cri.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+include = ["cri*"]
+exclude = ["alembic*"]

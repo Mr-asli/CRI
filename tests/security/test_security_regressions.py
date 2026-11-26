@@ -21,7 +21,9 @@ def test_policy_deny_by_default_for_unknown_action(tmp_path: Path):
         policy.check(identity, "admin")
 
 
-def test_expired_approval_token_is_rejected(tmp_path: Path):
-    tokens = Tokens("q" * 32, ttl=-1, nonce_db=tmp_path / "nonce.sqlite")
+def test_expired_approval_token_is_rejected(tmp_path: Path, monkeypatch):
+    import cri.core
+    tokens = Tokens("q" * 32, ttl=1, nonce_db=tmp_path / "nonce.sqlite")
     token = tokens.issue("proposal")
+    monkeypatch.setattr(cri.core.time, "time", lambda: 9999999999)
     assert tokens.use(token, "proposal") is False

@@ -1,5 +1,4 @@
-# Internal use only — private CRI CI workflow.
-name: CRI Internal CI
+name: CRI CI
 on:
   workflow_dispatch:
   push:
@@ -11,110 +10,125 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: read
-  actions: read
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: '3.12', cache: pip}
-      - run: python -m pip install ruff==0.15.19 mypy fastapi pydantic
-      - run: ruff check backend tests
-      - run: mypy backend/cri --ignore-missing-imports
   unit:
-    needs: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: '3.12', cache: pip}
-      - run: python -m pip install -e 'backend[test]' coverage
-      - run: coverage run --source=cri -m pytest -q tests/test_core.py tests/test_api_security.py
-      - run: coverage report -m
-      - run: coverage json -o coverage.json
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install backend and test dependencies
+        run: python -m pip install -e 'backend[test]'
+      - name: Compile all Python modules
+        run: python -m compileall -q backend/cri scripts tests
+      - name: Run unit, API, orchestration and security suites
+        run: PYTHONPATH=backend coverage run --source=cri -m pytest -q
+      - name: Enforce backend coverage floor
+        run: coverage report -m --fail-under=85
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: coverage
-          path: |
-            .coverage
-            coverage.json
+          name: backend-coverage
+          path: .coverage
           if-no-files-found: warn
   integration:
     needs: unit
     runs-on: ubuntu-latest
     env:
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+      POSTGRES_PASSWORD: ci-only-postgres-password
+      REDIS_PASSWORD: ci-only-redis-password
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Validate required CI secrets
-        run: test -n "$POSTGRES_PASSWORD" && test -n "$REDIS_PASSWORD"
-      - name: Build backend with BuildKit cache
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          push: false
-          tags: cri-api:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - run: docker compose -f docker-compose.test.yml up -d
-      - run: ./scripts/wait-for-healthy.sh postgres 120
-      - run: ./scripts/wait-for-healthy.sh redis 120
-      - run: docker compose -f docker-compose.test.yml ps
+      - name: Start PostgreSQL/pgvector, Redis and OPA
+        run: docker compose -f docker-compose.test.yml up -d
+      - name: Wait for infrastructure health
+        run: |
+          ./scripts/wait-for-healthy.sh postgres 120
+          ./scripts/wait-for-healthy.sh redis 120
+          ./scripts/wait-for-healthy.sh opa 120
+      - name: Apply PostgreSQL migration
+        run: docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test < backend/alembic/versions/0001_initial.sql
+      - name: Apply restricted runtime role migration
+        run: |
+          docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -v app_password=ci-only-app-password -v database_name=cri_test -U cri_test -d cri_test < backend/alembic/versions/0002_runtime_role.sql
+      - name: Verify restricted runtime role privileges
+        run: |
+          docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test -c "SELECT 1 / ((has_database_privilege('cri_app', 'cri_test', 'CONNECT') AND has_table_privilege('cri_app', 'audit_events', 'SELECT') AND has_table_privilege('cri_app', 'audit_events', 'INSERT') AND NOT has_table_privilege('cri_app', 'audit_events', 'UPDATE') AND NOT has_table_privilege('cri_app', 'audit_events', 'DELETE') AND NOT has_table_privilege('cri_app', 'audit_events', 'TRUNCATE') AND has_sequence_privilege('cri_app', 'audit_events_sequence_seq', 'USAGE') AND has_table_privilege('cri_app', 'tasks', 'UPDATE'))::int);"
+      - name: Verify runtime role can authenticate
+        run: |
+          docker compose -f docker-compose.test.yml exec -T -e PGPASSWORD=ci-only-app-password postgres psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U cri_app -d cri_test -c "SELECT current_user, current_database();"
+      - name: Verify audit log is append-only for runtime role
+        shell: bash
+        run: |
+          export PGPASSWORD=ci-only-app-password
+          DB=(docker compose -f docker-compose.test.yml exec -T -e PGPASSWORD="$PGPASSWORD" postgres psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U cri_app -d cri_test)
+          "${DB[@]}" -c "INSERT INTO audit_events (event_id,event,actor,details,previous_hash,event_hash) VALUES ('ci-audit-test','ci.test','ci','{}','$(printf '0%.0s' {1..64})','$(printf '1%.0s' {1..64})');"
+          if "${DB[@]}" -c "UPDATE audit_events SET event='tampered' WHERE event_id='ci-audit-test';"; then
+            echo "ERROR: runtime role unexpectedly updated an audit record"
+            exit 1
+          fi
+          if "${DB[@]}" -c "DELETE FROM audit_events WHERE event_id='ci-audit-test';"; then
+            echo "ERROR: runtime role unexpectedly deleted an audit record"
+            exit 1
+          fi
+          if "${DB[@]}" -c "TRUNCATE TABLE audit_events;"; then
+            echo "ERROR: runtime role unexpectedly truncated the audit log"
+            exit 1
+          fi
+          echo "Audit append-only checks passed."
+      - name: Verify PostgreSQL schema and pgvector extension
+        run: docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test -c "SELECT to_regclass('public.tasks'), extname FROM pg_extension WHERE extname='vector';"
+      - name: Evaluate OPA human policy
+        run: |
+          docker compose -f docker-compose.test.yml exec -T opa sh -c 'echo eyJzdWJqZWN0Ijp7InR5cGUiOiJodW1hbiIsImF1dGhlbnRpY2F0ZWQiOnRydWV9LCJhY3Rpb24iOiJhcGkuYWNjZXNzIiwicmVzb3VyY2UiOnt9fQ== | base64 -d > /tmp/input.json'
+          docker compose -f docker-compose.test.yml exec -T opa opa eval --data /policies --input /tmp/input.json 'data.cri.authz.allow'
       - if: always()
-        run: docker compose -f docker-compose.test.yml logs --no-color > integration-logs.txt || true
-      - if: always()
-        run: docker compose -f docker-compose.test.yml down --volumes --remove-orphans
+        run: |
+          docker compose -f docker-compose.test.yml logs --no-color > integration-logs.txt || true
+          docker compose -f docker-compose.test.yml down --volumes --remove-orphans
       - uses: actions/upload-artifact@v4
         if: always()
-        with: {name: integration-logs, path: integration-logs.txt, if-no-files-found: warn}
-  security:
-    needs: integration
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: '3.12', cache: pip}
-      - run: python -m pip install -e 'backend[test]'
-      - run: PYTHONPATH=backend pytest -q tests/security tests/test_security.py tests/test_core.py
+        with:
+          name: infrastructure-integration-logs
+          path: integration-logs.txt
+          if-no-files-found: warn
   e2e:
-    needs: security
+    needs: integration
     runs-on: ubuntu-latest
     env:
       CRI_ADMIN_TOKEN: ${{ secrets.CRI_ADMIN_TOKEN }}
       CRI_APPROVAL_SECRET: ${{ secrets.APPROVAL_SIGNING_KEY }}
+      POSTGRES_PASSWORD: ${{ secrets.CRI_POSTGRES_PASSWORD }}
+      CRI_APP_PASSWORD: ${{ secrets.CRI_APP_PASSWORD }}
+      REDIS_PASSWORD: ${{ secrets.CRI_REDIS_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Validate required CI secrets
-        run: test -n "$CRI_ADMIN_TOKEN" && test -n "$CRI_APPROVAL_SECRET"
-      - name: Build API with BuildKit cache
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          push: false
-          load: true
-          tags: cri-api:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Run compose smoke E2E
+      - name: Validate required secrets
+        run: test -n "$CRI_ADMIN_TOKEN" && test -n "$CRI_APPROVAL_SECRET" && test -n "$POSTGRES_PASSWORD" && test -n "$CRI_APP_PASSWORD" && test -n "$REDIS_PASSWORD"
+      - name: Run full compose smoke E2E
         run: ./scripts/run-e2e-demo.sh
       - if: always()
         uses: actions/upload-artifact@v4
-        with: {name: e2e-logs, path: artifacts/, if-no-files-found: warn}
+        with:
+          name: e2e-logs
+          path: artifacts/
+          if-no-files-found: warn
   dashboard:
-    needs: integration
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Require real dashboard source
-        run: test -f dashboard/package.json || { echo 'Dashboard implementation is not present; refusing to report a fake green build.' >&2; exit 1; }
       - uses: actions/setup-node@v4
-        with: {node-version: '22'}
-      - working-directory: dashboard
+        with:
+          node-version: '22'
+      - name: Install dashboard dependencies
+        working-directory: dashboard
         run: npm install --no-audit --no-fund
-      - working-directory: dashboard
-        run: npm run lint && npm run build && npm test -- --run
+      - name: Type-check, test and build dashboard
+        working-directory: dashboard
+        run: npm run lint && npm test -- --run && npm run build
+      - name: Build production dashboard image
+        run: docker build -t cri-dashboard:ci ./dashboard

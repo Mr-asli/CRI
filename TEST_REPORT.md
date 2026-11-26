@@ -1,41 +1,19 @@
-# Test report — pre-GitHub snapshot
+# Test report — CRI package
 
-## Python tests
+## Local results
 
-Command: `PYTHONPATH=backend pytest -q`  
-Result: **30 passed**.
+- Python test suite: **70 passed**.
+- Backend statement coverage: **85%** (1016 statements; 152 missed), meeting the configured 85% threshold.
+- Python bytecode compilation: completed successfully.
+- YAML parsing: Compose and GitHub Actions configuration were previously validated; Docker execution itself was not run.
 
-Branch coverage command: `PYTHONPATH=backend coverage run --branch --source=cri -m pytest -q` followed by `coverage report -m`. Result: **88% total coverage** (coverage.py statement/branch metric). 100% target is not met.
+## Deferred checks
 
-| File | Coverage |
-|---|---:|
-| `backend/cri/__init__.py` | 100% |
-| `backend/cri/agents/__init__.py` | 100% |
-| `backend/cri/agents/base.py` | 93% |
-| `backend/cri/agents/factory.py` | 89% |
-| `backend/cri/cli.py` | 82% |
-| `backend/cri/core.py` | 87% |
-| `backend/cri/main.py` | 85% |
-| `backend/cri/orchestration/__init__.py` | 100% |
-| `backend/cri/orchestration/dag.py` | 94% |
-| `backend/cri/tools/__init__.py` | 100% |
-| `backend/cri/tools/gateway.py` | 80% |
+The following require Docker/GitHub Actions or dependency installation and are not marked as passed:
 
-## Coverage and limitations
+- PostgreSQL/pgvector, Redis, OPA and Compose integration tests.
+- End-to-end workflow using real CI secrets.
+- Dashboard npm install, Vitest, TypeScript build and production container build. An npm install attempt did not complete in this environment.
+- Docker sandbox execution and host systemd/watchdog deployment tests.
 
-- Python unit/security/API/agent/orchestrator tests run locally and passed.
-- Docker Compose, real Docker sandbox, PostgreSQL/Redis/pgvector integration, real chaos, and full E2E were not run because Docker/servers are absent.
-- Dashboard npm installation timed out due package registry/network limitation; lint, Vitest, and production build were not run locally.
-- GitHub Actions workflows have not been executed.
-- gVisor/Firecracker tests require a compatible dedicated runner; Firecracker requires KVM.
-
-Do not interpret local unit tests or mock adapters as proof of infrastructure integration.
-
-## Make target checks
-
-- `make test`: passed, 30 tests.
-- `make audit`: passed, local empty audit chain verified (`valid=true`, `count=0`).
-- `make e2e`: missing-secret guard behaved as designed; with temporary test-only environment secrets, Docker command failed because Docker is not installed. No E2E pass is claimed.
-- `make up`, `make reset`: blocked by absent Docker CLI.
-- `make kill`: not run against a live API because Docker-backed API is unavailable.
-- Dashboard `npm install`: timed out at package registry; lint, test and build not run locally.
+A passing local Python suite is not a production-readiness certification.
