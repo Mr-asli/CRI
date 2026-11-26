@@ -39,6 +39,13 @@ def test_agents_endpoint_does_not_claim_agents_are_running(monkeypatch, tmp_path
 
 def test_authenticated_api_routes_and_fail_closed_workflow(monkeypatch, tmp_path):
     main = load_app(monkeypatch, tmp_path)
+
+    def unavailable(code):
+        raise main.SandboxUnavailable(
+            "Docker Engine unavailable; execution denied"
+        )
+
+    monkeypatch.setattr(main.FLOW.s, "run", unavailable)
     headers = {"Authorization": "Bearer " + "a" * 32}
     with TestClient(main.app) as client:
         assert client.get("/").status_code == 200
