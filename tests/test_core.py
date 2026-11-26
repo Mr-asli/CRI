@@ -62,4 +62,7 @@ def test_promotion_requires_separate_human_token(tmp_path):
         workflow.decide(proposal["id"], "approve", "ok", "bad")
     assert workflow.items[proposal["id"]]["status"] == "tested"
     human_token = workflow.issue_human_token(proposal["id"])
-    assert workflow.decide(proposal["id"], "approve", "reviewed", human_token)["status"] == "promoted"
+    assert (
+        workflow.decide(proposal["id"], "approve", "reviewed", human_token)["status"]
+        == "promoted"
+    )

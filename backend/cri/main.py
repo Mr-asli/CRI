@@ -6,7 +6,17 @@ from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from .core import Audit, Denied, Kill, Memory, Policy, Sandbox, SandboxUnavailable, Tokens, Workflow
+from .core import (
+    Audit,
+    Denied,
+    Kill,
+    Memory,
+    Policy,
+    Sandbox,
+    SandboxUnavailable,
+    Tokens,
+    Workflow,
+)
 from .agents import AgentFactory
 from .agents.factory import AGENT_TYPES
 from .tools import ToolGateway, ToolSpec
@@ -18,10 +28,24 @@ AUDIT = Audit(os.getenv("CRI_AUDIT_FILE", DATA + "/audit.jsonl"))
 POLICY = Policy(AUDIT)
 KILL = Kill(os.getenv("CRI_KILL_FILE", DATA + "/KILL"))
 MEMORY = Memory()
-TOKENS = Tokens(APPROVAL_SECRET, nonce_db=os.getenv("CRI_NONCE_DB", DATA + "/approval_nonces.sqlite3")) if len(APPROVAL_SECRET.encode()) >= 32 else None
+TOKENS = (
+    Tokens(
+        APPROVAL_SECRET,
+        nonce_db=os.getenv("CRI_NONCE_DB", DATA + "/approval_nonces.sqlite3"),
+    )
+    if len(APPROVAL_SECRET.encode()) >= 32
+    else None
+)
 FLOW = Workflow(AUDIT, POLICY, KILL, TOKENS, Sandbox()) if TOKENS else None
 GATEWAY = ToolGateway(POLICY, AUDIT, KILL)
-GATEWAY.register(ToolSpec("memory.write", "memory_write", frozenset({"memory"}), lambda payload: MEMORY.write("lesson", payload["text"])))
+GATEWAY.register(
+    ToolSpec(
+        "memory.write",
+        "memory_write",
+        frozenset({"memory"}),
+        lambda payload: MEMORY.write("lesson", payload["text"]),
+    )
+)
 AGENT_FACTORY = AgentFactory(POLICY, GATEWAY)
 
 
@@ -50,21 +74,47 @@ class Decision(BaseModel):
 
 def require_admin(authorization: str | None = Header(default=None)):
     if not ADMIN_TOKEN or len(ADMIN_TOKEN.encode()) < 32:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="admin authentication is not configured")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="admin authentication is not configured",
+        )
     scheme, _, supplied = (authorization or "").partition(" ")
-    if scheme.lower() != "bearer" or not supplied or not hmac.compare_digest(supplied, ADMIN_TOKEN):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required", headers={"WWW-Authenticate": "Bearer"})
+    if (
+        scheme.lower() != "bearer"
+        or not supplied
+        or not hmac.compare_digest(supplied, ADMIN_TOKEN)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return "human-admin"
 
 
 @app.get("/api/status")
 def status_view():
-    return {"status": "stopped" if KILL.active() else "running", "audit": AUDIT.verify(), "sandbox": "configured" if Sandbox().docker_binary else "unavailable"}
+    return {
+        "status": "stopped" if KILL.active() else "running",
+        "audit": AUDIT.verify(),
+        "sandbox": "configured" if Sandbox().docker_binary else "unavailable",
+    }
 
 
 @app.get("/api/agents")
 def agents():
-    return [{"name": role, "role": role, "implemented": True, "status": "available_not_running", "capabilities": sorted(__import__("cri.core", fromlist=["ROLES"]).ROLES[role])} for role in AGENT_TYPES]
+    return [
+        {
+            "name": role,
+            "role": role,
+            "implemented": True,
+            "status": "available_not_running",
+            "capabilities": sorted(
+                __import__("cri.core", fromlist=["ROLES"]).ROLES[role]
+            ),
+        }
+        for role in AGENT_TYPES
+    ]
 
 
 @app.post("/api/agents/{role}/run")
@@ -74,8 +124,17 @@ def run_agent(role: str, payload: dict, _admin=Depends(require_admin)):
     try:
         agent = AGENT_FACTORY.create_root(f"admin-invoked-{role}", role)
         result = agent.execute(os.urandom(8).hex(), payload)
-        AUDIT.add("agent.task_completed", role, {"task_id": result.task_id, "status": result.status})
-        return {"agent": result.agent, "task_id": result.task_id, "status": result.status, "output": result.output}
+        AUDIT.add(
+            "agent.task_completed",
+            role,
+            {"task_id": result.task_id, "status": result.status},
+        )
+        return {
+            "agent": result.agent,
+            "task_id": result.task_id,
+            "status": result.status,
+            "output": result.output,
+        }
     except (Denied, ValueError, RuntimeError) as exc:
         raise HTTPException(403, str(exc)) from exc
 
@@ -101,7 +160,9 @@ def test_task(pid: str, _admin=Depends(require_admin)):
     except KeyError as exc:
         raise HTTPException(404, "unknown proposal") from exc
     except SandboxUnavailable as exc:
-        raise HTTPException(503, {"code": "sandbox_unavailable", "detail": str(exc)}) from exc
+        raise HTTPException(
+            503, {"code": "sandbox_unavailable", "detail": str(exc)}
+        ) from exc
     except RuntimeError as exc:
         raise HTTPException(423, str(exc)) from exc
 
