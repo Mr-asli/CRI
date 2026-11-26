@@ -82,9 +82,9 @@ jobs:
       - name: Verify PostgreSQL schema and pgvector extension
         run: docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test -c "SELECT to_regclass('public.tasks'), extname FROM pg_extension WHERE extname='vector';"
       - name: Evaluate OPA human policy
+        shell: bash
         run: |
-          docker compose -f docker-compose.test.yml exec -T opa sh -c 'echo eyJzdWJqZWN0Ijp7InR5cGUiOiJodW1hbiIsImF1dGhlbnRpY2F0ZWQiOnRydWV9LCJhY3Rpb24iOiJhcGkuYWNjZXNzIiwicmVzb3VyY2UiOnt9fQ== | base64 -d > /tmp/input.json'
-          docker compose -f docker-compose.test.yml exec -T opa opa eval --data /policies --input /tmp/input.json 'data.cri.authz.allow'
+          printf '%s' '{"subject":{"type":"human","authenticated":true},"action":"api.access","resource":{}}' | docker compose -f docker-compose.test.yml exec -T opa opa eval --format raw --data /policies --stdin-input 'data.cri.authz.allow' | grep -qx 'true'
       - if: always()
         run: |
           docker compose -f docker-compose.test.yml logs --no-color > integration-logs.txt || true
