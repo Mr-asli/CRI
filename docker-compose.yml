@@ -38,11 +38,14 @@ services:
   dashboard:
     image: cri-dashboard:1.0.0
     build: ./dashboard
+    user: "101:101"
     ports: ["127.0.0.1:8080:8080"]
     depends_on:
       api: {condition: service_healthy}
     read_only: true
-    tmpfs: [/var/cache/nginx, /var/run]
+    tmpfs:
+      - /var/cache/nginx:uid=101,gid=101,mode=0755
+      - /var/run:uid=101,gid=101,mode=0755
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: "no"
