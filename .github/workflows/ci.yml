@@ -132,10 +132,12 @@ jobs:
           test -n "$POSTGRES_PASSWORD"
           test -n "$CRI_APP_PASSWORD"
           test -n "$REDIS_PASSWORD"
-          test -n "$CRI_LLM_BASE_URL"
-          test -n "$CRI_LLM_API_KEY"
-          test -n "$CRI_LLM_MODEL"
-          case "$CRI_LLM_PROVIDER" in openrouter|openai-compatible|openai|gemini|anthropic) ;; *) echo "Unsupported CRI_LLM_PROVIDER"; exit 1 ;; esac
+          if [[ -n "$CRI_LLM_BASE_URL$CRI_LLM_API_KEY$CRI_LLM_MODEL" ]]; then
+            test -n "$CRI_LLM_BASE_URL"
+            test -n "$CRI_LLM_API_KEY"
+            test -n "$CRI_LLM_MODEL"
+            case "$CRI_LLM_PROVIDER" in openrouter|openai-compatible|openai|gemini|anthropic) ;; *) echo "Unsupported CRI_LLM_PROVIDER"; exit 1 ;; esac
+          fi
           if [[ -n "$CRI_LLM_FALLBACK_PROVIDER$CRI_LLM_FALLBACK_BASE_URL$CRI_LLM_FALLBACK_MODEL$CRI_LLM_FALLBACK_API_KEY" ]]; then
             test -n "$CRI_LLM_FALLBACK_PROVIDER"
             test -n "$CRI_LLM_FALLBACK_BASE_URL"

@@ -30,3 +30,7 @@ Health state is updated from real request success/failure and exposed as a snaps
 ## Tests and deployment
 
 Unit tests mock all provider HTTP calls. GitHub Actions runs the Python suites and dashboard build. Live provider, rate-limit, billing, Railway networking and fallback behavior must be verified in deployment. Never commit API keys; use GitHub Actions/Railway secret stores. Rotate any key previously exposed in chat or repository history.
+
+### CI end-to-end boundary
+
+The infrastructure E2E smoke workflow intentionally does not create a task through `POST /api/tasks`, because that route invokes the configured external LLM provider and can fail transiently (for example, HTTP 503) or incur usage charges. Instead, the smoke workflow seeds a task row directly in the isolated CI PostgreSQL database and verifies API read-through, Redis caching, memory persistence, and audit behavior. Provider request/retry/fallback behavior is covered by deterministic mocked gateway unit tests. A live-provider check should be a separate opt-in workflow with its own explicit budget and credentials.
