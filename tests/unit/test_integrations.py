@@ -211,3 +211,64 @@ def test_improvement_workflow_restores_durable_stage(tmp_path):
     restored = ImprovementWorkflow(Audit(tmp_path / "restore-audit.jsonl"), tokens, repo)
     assert restored.items[item.id].stage == Stage.PROPOSAL
     engine.dispose()
+
+
+def test_developer_provider_failures_are_logged_safely(caplog):
+    import logging
+    from urllib.error import HTTPError, URLError
+    from cri.agents.developer import DeveloperUnavailable
+
+    failures = [
+        (
+            HTTPError(
+                "https://llm.example",
+                401,
+                "unauthorized",
+                None,
+                None
+            ),
+            "LLM provider HTTP failure: status=401",
+        ),
+        (
+            URLError("SENSITIVE_CONNECTION_DETAIL"),
+            "LLM provider connection failure",
+        ),
+        (
+            TimeoutError("SENSITIVE_TIMEOUT_DETAIL"),
+            "LLM provider failure: type=TimeoutError",
+        ),
+        (
+            OSError("SENSITIVE_SOCKET_DETAIL"),
+            "LLM provider failure: type=OSError",
+        ),
+        (
+            ValueError("SENSITIVE_RESPONSE_DETAIL"),
+            "LLM provider failure: type=ValueError",
+        ),
+    ]
+
+    for failure, expected_log in failures:
+        caplog.clear()
+
+        def broken_opener(*args, **kwargs):
+            raise failure
+
+        developer = Developer(
+            "https://llm.example/v1",
+            "k" * 32,
+            "test-model",
+            opener=broken_opener,
+        )
+
+        with pytest.raises(
+            DeveloperUnavailable,
+            match="configured LLM provider failed"
+        ):
+            developer.generate("create a simple module")
+
+        assert expected_log in caplog.text
+        assert "SENSITIVE_" not in caplog.text
+
+    assert "cri.llm" in caplog.text or any(
+        record.name == "cri.llm" for record in caplog.records
+    )

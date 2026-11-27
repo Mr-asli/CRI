@@ -62,18 +62,17 @@ class Developer:
             import logging
             if isinstance(exc, HTTPError):
                 logging.getLogger("cri.llm").error(
-                    "LLM provider HTTP failure: status=%s reason=%s",
-                    exc.code, str(exc.reason)[:200]
+                    "LLM provider HTTP failure: status=%s",
+                    exc.code
                 )
             elif isinstance(exc, URLError):
                 logging.getLogger("cri.llm").error(
-                    "LLM provider connection failure: reason=%s",
-                    str(exc.reason)[:200]
+                    "LLM provider connection failure"
                 )
             else:
                 logging.getLogger("cri.llm").error(
-                    "LLM provider failure: type=%s reason=%s",
-                    type(exc).__name__, str(exc)[:200]
+                    "LLM provider failure: type=%s",
+                    type(exc).__name__
                 )
             raise DeveloperUnavailable("configured LLM provider failed; no code draft produced") from exc
         try:
