@@ -25,9 +25,18 @@ curl --fail --silent --show-error -H "Authorization: Bearer $CRI_ADMIN_TOKEN" ht
 
 # Exercise OPA-gated API + PostgreSQL task persistence.
 echo "E2E STEP 3: Create task"
-curl --fail --silent --show-error -X POST http://127.0.0.1:8000/api/tasks \
+TASK_HTTP_STATUS="$(curl --silent --show-error \
+  -o artifacts/e2e-task-created.json -w '%{http_code}' \
+  -X POST http://127.0.0.1:8000/api/tasks \
   -H "Authorization: Bearer $CRI_ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"goal":"CI integration smoke proposal"}' > artifacts/e2e-task-created.json
+  -d '{"goal":"CI integration smoke proposal"}')"
+
+echo "CREATE TASK HTTP STATUS: $TASK_HTTP_STATUS"
+if [ "$TASK_HTTP_STATUS" != "200" ] && [ "$TASK_HTTP_STATUS" != "201" ]; then
+  echo "CREATE TASK ERROR BODY:"
+  cat artifacts/e2e-task-created.json
+  exit 1
+fi
 TASK_ID="$(python -c 'import json; print(json.load(open("artifacts/e2e-task-created.json"))["id"])')"
 echo "E2E STEP 4: List tasks"
 curl --fail --silent --show-error -H "Authorization: Bearer $CRI_ADMIN_TOKEN" \
