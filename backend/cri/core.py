@@ -45,7 +45,11 @@ class Audit:
         self.db_writer = None
         remote_url = os.getenv("CRI_AUDIT_REMOTE_URL") or os.getenv("AUDIT_WORM_URL")
         remote_token = os.getenv("CRI_AUDIT_REMOTE_TOKEN") or os.getenv("AUDIT_WORM_TOKEN", "")
-        if remote_url:
+        s3_bucket = os.getenv("CRI_AUDIT_S3_BUCKET")
+        if s3_bucket:
+            from .integrations.external_audit import S3ObjectLockAuditSink
+            self.remote_sink = S3ObjectLockAuditSink.from_env()
+        elif remote_url:
             from .integrations.external_audit import ExternalAuditSink
             self.remote_sink = ExternalAuditSink(remote_url, remote_token)
 
@@ -378,7 +382,7 @@ class Workflow:
     def __init__(self, audit, policy, kill, tokens, sandbox, developer=None):
         self.a, self.p, self.k, self.t, self.s = audit, policy, kill, tokens, sandbox
         from .agents.developer import Developer
-        self.developer = developer or Developer()
+        self.developer = developer or Developer(audit=audit)
         self.items = {}
         self.repository = None
 

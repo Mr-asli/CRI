@@ -3,6 +3,19 @@ import json
 import time
 
 class RedisTTLStore:
+    @classmethod
+    def from_url(cls, url=None, prefix="cri:", **kwargs):
+        import os
+        target = url or os.getenv("CRI_REDIS_URL") or os.getenv("REDIS_URL")
+        if not target:
+            raise ValueError("Redis URL is required")
+        try:
+            import redis
+        except ImportError as exc:
+            raise RuntimeError("redis package is required") from exc
+        client = redis.Redis.from_url(target, decode_responses=True, socket_connect_timeout=3, socket_timeout=5, **kwargs)
+        client.ping()
+        return cls(client, prefix)
     def __init__(self, client, prefix="cri:"):
         self.client, self.prefix = client, prefix
     def _key(self, key):

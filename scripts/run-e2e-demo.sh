@@ -18,46 +18,25 @@ trap cleanup EXIT INT TERM
 docker compose up -d --build
 ./scripts/wait-for-healthy.sh api 180
 ./scripts/wait-for-healthy.sh dashboard 120
-echo "E2E STEP 1: API status"
 curl --fail --silent --show-error http://127.0.0.1:8000/api/status > artifacts/e2e-status.json
-echo "E2E STEP 2: Audit verify before"
 curl --fail --silent --show-error -H "Authorization: Bearer $CRI_ADMIN_TOKEN" http://127.0.0.1:8000/api/audit/verify > artifacts/e2e-audit-before.json
 
 # Exercise OPA-gated API + PostgreSQL task persistence.
-echo "E2E STEP 3: Create task"
-TASK_HTTP_STATUS="$(curl --silent --show-error \
-  -o artifacts/e2e-task-created.json -w '%{http_code}' \
-  -X POST http://127.0.0.1:8000/api/tasks \
+curl --fail --silent --show-error -X POST http://127.0.0.1:8000/api/tasks \
   -H "Authorization: Bearer $CRI_ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"goal":"CI integration smoke proposal"}')"
-
-echo "CREATE TASK HTTP STATUS: $TASK_HTTP_STATUS"
-if [ "$TASK_HTTP_STATUS" != "200" ] && [ "$TASK_HTTP_STATUS" != "201" ]; then
-  echo "CREATE TASK ERROR BODY:"
-  cat artifacts/e2e-task-created.json
-
-  echo "API ERROR LOG:"
-  docker compose logs --no-color --tail=200 api > artifacts/e2e-api-error.log 2>&1 || true
-  cat artifacts/e2e-api-error.log
-
-  exit 1
-fi
+  -d '{"goal":"CI integration smoke proposal"}' > artifacts/e2e-task-created.json
 TASK_ID="$(python -c 'import json; print(json.load(open("artifacts/e2e-task-created.json"))["id"])')"
-echo "E2E STEP 4: List tasks"
 curl --fail --silent --show-error -H "Authorization: Bearer $CRI_ADMIN_TOKEN" \
   http://127.0.0.1:8000/api/tasks > artifacts/e2e-tasks.json
 python -c 'import json,sys; rows=json.load(open("artifacts/e2e-tasks.json")); assert any(x["id"] == sys.argv[1] for x in rows)' "$TASK_ID"
 
 # Exercise durable memory and audit writes.
-echo "E2E STEP 5: Create memory"
 curl --fail --silent --show-error -X POST http://127.0.0.1:8000/api/memory \
   -H "Authorization: Bearer $CRI_ADMIN_TOKEN" -H 'Content-Type: application/json' \
   -d '{"kind":"lesson","text":"CI persistence smoke record"}' > artifacts/e2e-memory-created.json
-echo "E2E STEP 6: Read memory"
 curl --fail --silent --show-error -H "Authorization: Bearer $CRI_ADMIN_TOKEN" \
   http://127.0.0.1:8000/api/memory > artifacts/e2e-memory.json
 grep -q 'CI persistence smoke record' artifacts/e2e-memory.json
-echo "E2E STEP 7: Audit verify after"
 curl --fail --silent --show-error -H "Authorization: Bearer $CRI_ADMIN_TOKEN" \
   http://127.0.0.1:8000/api/audit/verify > artifacts/e2e-audit-after.json
 

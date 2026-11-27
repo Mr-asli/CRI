@@ -7,6 +7,13 @@ class OPADenied(PermissionError): pass
 class OPAUnavailable(RuntimeError): pass
 
 class OPAClient:
+    @classmethod
+    def from_env(cls, timeout=2.0, opener=urlopen):
+        import os
+        endpoint = os.getenv("CRI_OPA_URL") or os.getenv("OPA_URL")
+        if not endpoint:
+            raise ValueError("CRI_OPA_URL is not configured")
+        return cls(endpoint, timeout, opener)
     def __init__(self, endpoint: str, timeout: float = 2.0, opener=urlopen):
         if not endpoint.startswith("http://") and not endpoint.startswith("https://"):
             raise ValueError("OPA endpoint must be HTTP(S)")

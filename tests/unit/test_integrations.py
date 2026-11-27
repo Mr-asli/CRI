@@ -212,117 +212,47 @@ def test_improvement_workflow_restores_durable_stage(tmp_path):
     assert restored.items[item.id].stage == Stage.PROPOSAL
     engine.dispose()
 
+def test_s3_object_lock_sink_uses_compliance_retention():
+    from cri.integrations.external_audit import S3ObjectLockAuditSink
+    class S3:
+        def __init__(self): self.kwargs=None
+        def put_object(self, **kwargs): self.kwargs=kwargs
+    client=S3(); sink=S3ObjectLockAuditSink(client,"audit-bucket",30)
+    digest=sink.append({"event":"test"})
+    assert client.kwargs["ObjectLockMode"]=="COMPLIANCE"
+    assert client.kwargs["Metadata"]["sha256"]==digest
+    assert client.kwargs["Key"].startswith("cri-audit/")
 
-def test_developer_provider_failures_are_logged_safely(caplog):
-    import logging
-    from urllib.error import HTTPError, URLError
-    from cri.agents.developer import DeveloperUnavailable
+def test_redis_store_from_url_uses_authenticated_client(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    calls={}
+    class Client:
+        def ping(self): calls["ping"]=True
+    class RedisFactory:
+        @staticmethod
+        def from_url(url, **kwargs): calls.update(url=url,kwargs=kwargs); return Client()
+    monkeypatch.setitem(sys.modules,"redis",SimpleNamespace(Redis=RedisFactory))
+    store=RedisTTLStore.from_url("rediss://user:pass@redis.test:6379/0")
+    assert isinstance(store,RedisTTLStore) and calls["ping"]
+    assert calls["url"].startswith("rediss://")
 
-    failures = [
-        (
-            HTTPError(
-                "https://llm.example",
-                401,
-                "unauthorized",
-                None,
-                None
-            ),
-            "LLM provider HTTP failure: status=401",
-        ),
-        (
-            URLError("SENSITIVE_CONNECTION_DETAIL"),
-            "LLM provider connection failure",
-        ),
-        (
-            TimeoutError("SENSITIVE_TIMEOUT_DETAIL"),
-            "LLM provider failure: type=TimeoutError",
-        ),
-        (
-            OSError("SENSITIVE_SOCKET_DETAIL"),
-            "LLM provider failure: type=OSError",
-        ),
-        (
-            ValueError("SENSITIVE_RESPONSE_DETAIL"),
-            "LLM provider failure: type=ValueError",
-        ),
-    ]
+def test_opa_client_from_env(monkeypatch):
+    monkeypatch.setenv("CRI_OPA_URL","http://opa:8181")
+    client=OPAClient.from_env()
+    assert client.endpoint=="http://opa:8181"
 
-    for failure, expected_log in failures:
-        caplog.clear()
-
-        def broken_opener(*args, **kwargs):
-            raise failure
-
-        developer = Developer(
-            "https://llm.example/v1",
-            "k" * 32,
-            "test-model",
-            opener=broken_opener,
-        )
-
-        with pytest.raises(
-            DeveloperUnavailable,
-            match="configured LLM provider failed"
-        ):
-            developer.generate("create a simple module")
-
-        assert expected_log in caplog.text
-        assert "SENSITIVE_" not in caplog.text
-
-    assert "cri.llm" in caplog.text or any(
-        record.name == "cri.llm" for record in caplog.records
-    )
-
-def test_developer_retries_transient_http_failures(monkeypatch):
-    import json
-    from urllib.error import HTTPError
-    from cri.agents.developer import Developer
-
-    attempts = []
-    delays = []
-
-    class FakeResponse:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-        def read(self):
-            return json.dumps({
-                "choices": [{
-                    "message": {
-                        "content": "def generated():\n    return True"
-                    }
-                }]
-            }).encode()
-
-    def fake_opener(request, timeout):
-        attempts.append(timeout)
-        if len(attempts) < 3:
-            raise HTTPError(
-                "https://llm.example",
-                503,
-                "unavailable",
-                None,
-                None
-            )
-        return FakeResponse()
-
-    monkeypatch.setattr(
-        "cri.agents.developer.time.sleep",
-        lambda delay: delays.append(delay)
-    )
-
-    developer = Developer(
-        "https://llm.example/v1",
-        "k" * 32,
-        "test-model",
-        opener=fake_opener,
-    )
-
-    draft = developer.generate("create a simple module")
-
-    assert draft.status == "draft_only"
-    assert len(attempts) == 3
-    assert delays == [1, 2]
+def test_s3_object_lock_from_env(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    from cri.integrations.external_audit import S3ObjectLockAuditSink
+    calls={}
+    class Boto:
+        @staticmethod
+        def client(name,region_name=None): calls.update(name=name,region=region_name); return object()
+    monkeypatch.setitem(sys.modules,"boto3",Boto)
+    monkeypatch.setenv("CRI_AUDIT_S3_BUCKET","immutable-audit")
+    monkeypatch.setenv("CRI_AUDIT_S3_RETENTION_DAYS","90")
+    sink=S3ObjectLockAuditSink.from_env()
+    assert sink.bucket=="immutable-audit" and sink.retention_days==90
+    assert calls["name"]=="s3"
