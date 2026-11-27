@@ -10,11 +10,11 @@
 - Added `docs/LLM_GATEWAY.md` and updated `.env.example`.
 - Dashboard source, Dockerfile, Vitest configuration, and CI dashboard build job are retained from the inspected source ZIP.
 
-## Verification performed in this environment
+## Verification performed in the documentation review
 
-- Python compileall: passed.
-- Full Python test suite: **91 passed**.
-- Python statement coverage: **85%**, meeting the repository CI threshold.
+- Full Python test suite: **98 passed** (Python 3.13.5).
+- Python statement coverage: **86%** in the same run, meeting the repository CI threshold.
+- These results are local source-level checks; they do not certify external services or deployment.
 - This environment did not run Docker Compose, Railway, live Redis, live OPA, S3 Object Lock, or live LLM-provider calls. Dashboard dependencies/build were not re-run in this revision.
 
 ## Important limitations — not certified production-ready

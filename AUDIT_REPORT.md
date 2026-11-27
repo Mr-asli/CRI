@@ -19,8 +19,8 @@ Reviewed backend API/core/agents/orchestration/tools, database adapters/models/m
 
 ## Verification
 
-- 77 local tests passed.
-- 85% backend statement coverage (CI threshold: 85%).
+- 98 local Python tests passed (Python 3.13.5 review run).
+- 86% backend statement coverage in the same run (CI threshold: 85%).
 - Python compilation and YAML/shell syntax checks passed.
 
 ## Findings / limitations

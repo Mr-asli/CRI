@@ -15,7 +15,7 @@ This package adds integration code and test scaffolding requested for the finali
 
 ## Local validation
 
-77 tests passed; backend statement coverage 85%; Python compileall, YAML parsing, and CI shell syntax checks passed.
+98 Python tests passed; backend statement coverage 86% (review run on Python 3.13.5). These results supersede earlier test-count and coverage figures in this report.
 
 ## Not verified in this environment
 
