@@ -67,7 +67,7 @@ async def lifespan(app):
 
     engine = None
     redis_client = None
-    database_url = os.getenv("CRI_DATABASE_URL")
+    database_url = os.getenv("CRI_DATABASE_URL") or os.getenv("DATABASE_URL")
     if database_url:
         engine = get_engine(database_url)
         with engine.connect() as connection:
