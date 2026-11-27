@@ -22,7 +22,7 @@ class DeveloperUnavailable(RuntimeError):
 class Developer:
     """OpenAI-compatible chat-completions client with strict response validation."""
     def __init__(self, endpoint: str | None = None, api_key: str | None = None,
-                 model: str | None = None, timeout: float = 45.0, opener=urlopen):
+                 model: str | None = None, timeout: float = 120.0, opener=urlopen):
         self.endpoint = (endpoint or os.getenv("CRI_LLM_BASE_URL", "")).rstrip("/")
         self.api_key = api_key if api_key is not None else os.getenv("CRI_LLM_API_KEY", "")
         self.model = model or os.getenv("CRI_LLM_MODEL", "")
