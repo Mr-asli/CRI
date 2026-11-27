@@ -1,40 +1,38 @@
-# CRI status — final implementation package v1.0
+# CRI implementation status — v1.0 candidate
 
-## Implemented in this package
+## Work completed in this package revision
 
-- SQLAlchemy 2.x models and repository boundaries for tasks, audit events, memory records, and optional pgvector embeddings.
-- PostgreSQL 16 + pgvector schema migrations (`0001_initial.sql`, `0002_runtime_role.sql`). The runtime role is separate from the migration/database owner; its audit table grants are INSERT/SELECT only and a database trigger rejects UPDATE/DELETE.
-- Redis TTL storage adapter and startup connectivity check when `CRI_REDIS_URL` is configured.
-- OPA HTTP decision client, fail-closed behavior, Rego authorization policy, and integration with API admin access and agent policy checks when `CRI_OPA_URL` is configured.
-- Optional HTTPS remote audit forwarder. The receiving service must provide independently enforced WORM/append-only retention.
-- Deterministic Developer draft generator; generated source is a reviewable template, not an unrestricted code-writing model.
-- Self-improvement state machine with security, sandbox, test, comparison, and one-time signed human approval gates.
-- Docker CLI sandbox runner remains fail-closed: requires an available Docker Engine and an operator-pinned immutable image digest; no Docker socket is mounted into the API container.
-- Host watchdog and systemd unit templates. The host-level stop request is created by a root operator outside the API/agent process. Host-level start is also root-operator-only.
-- Responsive React dashboard source, Nginx reverse proxy configuration, and production dashboard Dockerfile.
-- Docker Compose topology for API, dashboard, PostgreSQL/pgvector, Redis, OPA, and one-shot migrations.
-- GitHub Actions workflow for Python tests/coverage, infrastructure migration checks, OPA policy evaluation, compose E2E, and dashboard typecheck/test/build/container build.
+- Replaced the deterministic Developer template with an OpenAI-compatible HTTPS code-generation client. It validates raw Python output and syntax, enforces filename/size limits, and returns drafts only. It refuses to generate when provider configuration is missing or the provider fails. Generated code is not executed or promoted by the LLM client.
+- Added Redis TTL storage, bounded list-queue primitives, and agent heartbeat/state primitives. Redis remains optional; when configured, startup connectivity is mandatory and startup fails closed if unavailable.
+- Added `REDIS_URL` and `OPA_URL` compatibility aliases while retaining the existing `CRI_*` names.
+- Added persistent SQLAlchemy models and repository operations for improvement records and agent state, plus PostgreSQL migration `0003_runtime_state.sql`.
+- Added a versioned PostgreSQL migration runner using a dedicated privileged `CRI_MIGRATION_DATABASE_URL`. The container removes that variable before starting Uvicorn. Runtime persistence must use the restricted `cri_app` role.
+- Made PostgreSQL Audit replay idempotent by using the event hash as the stable event ID. On startup, local JSONL events are replayed to the configured remote receiver and PostgreSQL. `/api/status` now reports the database Audit count and chain-link validity separately from local Audit validity.
+- Added authenticated, short-lived, single-use WebSocket tickets. The browser does not place the admin bearer token in the WebSocket URL.
+- Added Railway Dockerfile deployment configuration and documented that Railway services (API, Dashboard, PostgreSQL, Redis, OPA) are provisioned as separate services; Docker Compose remains the local/CI topology.
+- Updated environment documentation and added regression tests for Redis queues, agent heartbeat, database persistence, Audit idempotency, LLM response validation, and WebSocket ticket use.
 
-**Required status statement:** «موارد باقی‌مانده در محیط محلی (Docker/DB) نوشته شده‌اند و آماده اجرا در GitHub Actions هستند.»
+## Local verification performed for this ZIP
 
-This statement means the integration code and CI jobs are included. It does **not** mean those infrastructure jobs have already passed: this environment did not execute Docker Compose, PostgreSQL, Redis, OPA, or npm container builds.
-
-## Local verification performed
-
-- Python tests: 70 passed.
-- Backend statement coverage: 86% (threshold used in CI: 85%).
+- Python tests: **77 passed**.
+- Python statement coverage: **85%**, meeting the repository's configured CI floor.
 - Python compileall: passed.
-- YAML parse of both Compose files and CI workflow: passed.
-- Shell syntax checks for workflow run blocks: passed.
+- Docker Compose, GitHub Actions, and manual-demo YAML parsing: passed.
+- Shell script syntax checks: passed.
+- Dashboard dependency installation was attempted but timed out; TypeScript, Vitest, and production build are **not verified**.
+- Docker Engine, PostgreSQL/pgvector, Redis, OPA, Railway deployment, Docker sandbox execution, and host-level watchdog operation were **not run in this environment**.
 
-## Not certified / remaining deployment work
+## Not certified as complete / required external gates
 
-- GitHub Actions has not been run from this environment; repository secrets and a real runner are required.
-- Dashboard npm install, Vitest, TypeScript build, and Docker build were not run locally.
-- Docker sandbox execution was not run. The API container intentionally has no Docker socket; a dedicated remote sandbox worker/host with a restricted, authenticated execution API is required before enabling untrusted-code execution.
-- Host watchdog/systemd units are templates and must be installed and tested on a dedicated Linux host. The current API Kill Switch is an application admission latch; it is not wired to the privileged host stop file. The root operator stop script is the independent host control path.
-- A remote audit collector is optional and must be configured with `CRI_AUDIT_REMOTE_URL` and `CRI_AUDIT_REMOTE_TOKEN`; its server-side WORM guarantees require separate verification.
-- Human approval is authenticated by a one-time HMAC token in the workflow; production signing-key custody/rotation should move to a dedicated KMS/HSM.
-- Full agent autonomy, model-provider integration, continuous self-improvement discovery, distributed queues, chaos tests, and gVisor/Firecracker isolation are not certified as production-ready.
+- The remote audit forwarder sends HTTPS events but cannot itself guarantee WORM. The receiving service must enforce immutable retention/Object Lock and be independently tested. Its status is reported as configured receiver, not verified WORM.
+- The self-improvement state machine still needs production orchestration and trusted evidence collection. Client-supplied booleans are not sufficient proof of sandbox/test/security results; do not enable automatic promotion based on untrusted evidence.
+- Improvement and agent-state persistence primitives exist, but the complete multi-worker lifecycle and recovery behavior have not been integrated and verified end-to-end.
+- Redis queue primitives are implemented, but a production worker-consumer topology and distributed delivery guarantees require deployment integration and tests.
+- The Docker sandbox runs through a local Docker CLI only when an operator supplies a digest-pinned image and an isolated runner. The API service must not mount Docker socket. A dedicated remote sandbox provider is still required for Railway deployments.
+- The host watchdog and systemd units require installation by a host administrator on an independent Linux host. Railway does not provide a privileged host-level systemd control plane for the application container.
+- The API Kill Switch is an application admission latch; the independent host stop path remains an external host-operator integration.
+- Dashboard Build, Vitest, and browser acceptance remain unverified due to npm install timeout.
+- The LLM Developer requires `CRI_LLM_BASE_URL`, `CRI_LLM_API_KEY`, and `CRI_LLM_MODEL`; without them it fails closed. Provider output remains untrusted draft code.
+- Human approval token signing currently uses an environment-provided HMAC secret. Production key custody, rotation, and approval identity assurance should move to a dedicated KMS/HSM.
 
-CRI must remain in supervised development mode until these deployment gates are verified.
+**Release classification:** implementation candidate for controlled deployment testing, not certified production-ready. No statement that all capabilities are 100% complete or defect-free is made.

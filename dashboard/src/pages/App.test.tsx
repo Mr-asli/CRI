@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import App from './App';
 
 vi.mock('../api', () => ({
@@ -25,8 +25,8 @@ describe('CRI dashboard', () => {
 
   it('navigates to the security posture page', async () => {
     render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Security' }));
+    fireEvent.click(await within(screen.getAllByRole('navigation', { name: 'Main navigation' })[0]).getByRole('button', { name: 'Security' }));
     expect(screen.getByText('Overnight Lockdown')).toBeTruthy();
-    expect(screen.getByText(/Not implemented as an external host-level supervisor/)).toBeTruthy();
+    expect(screen.getByText(/Host-level watchdog template included; host installation and verification are still required./)).toBeTruthy();
   });
 });

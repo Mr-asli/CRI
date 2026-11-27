@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from .models import TaskRecord, AuditRecord, MemoryRecord
+from .models import TaskRecord, AuditRecord, MemoryRecord, ImprovementRecord, AgentStateRecord
 
 class SQLRepository:
     def __init__(self, sessions):
@@ -30,10 +30,19 @@ class SQLRepository:
         with self.sessions() as db:
             return list(db.scalars(select(TaskRecord).order_by(TaskRecord.created_at.desc()).limit(limit)))
 
-    def append_audit(self, event: str, actor: str, details: dict, previous_hash: str, event_hash: str):
+    def append_audit(self, event: str, actor: str, details: dict, previous_hash: str, event_hash: str, event_time: float = 0.0):
         with self.sessions() as db:
-            row = AuditRecord(event_id=uuid.uuid4().hex, event=event, actor=actor, details=details, previous_hash=previous_hash, event_hash=event_hash)
-            db.add(row); db.commit(); return row
+            # event_hash is the stable idempotency key across local-to-DB replay.
+            existing = db.scalar(select(AuditRecord).where(AuditRecord.event_hash == event_hash))
+            if existing is not None:
+                if (existing.event != event or existing.actor != actor or existing.details != details
+                        or existing.previous_hash.strip() != previous_hash or float(existing.event_time) != float(event_time)):
+                    raise RuntimeError("Audit idempotency conflict: stored event differs from replay")
+                return existing
+            row = AuditRecord(event_id=event_hash, event=event, actor=actor, details=details, previous_hash=previous_hash, event_hash=event_hash, event_time=event_time)
+            db.add(row)
+            db.commit()
+            return row
 
     def save_memory(self, kind: str, content: str, metadata: dict | None = None):
         with self.sessions() as db:
@@ -79,3 +88,54 @@ class SQLRepository:
         with self.sessions() as db:
             statement = select(MemoryEmbedding).order_by(MemoryEmbedding.embedding.cosine_distance(embedding)).limit(limit)
             return list(db.scalars(statement))
+
+
+    def save_improvement(self, item_id: str, description: str, stage: str, evidence: dict):
+        with self.sessions() as db:
+            row = db.get(ImprovementRecord, item_id)
+            if row is None:
+                row = ImprovementRecord(id=item_id, description=description, stage=stage, evidence=evidence)
+                db.add(row)
+            else:
+                row.description, row.stage, row.evidence = description, stage, evidence
+            db.commit()
+            return row
+
+    def list_improvements(self, limit: int = 200):
+        if not 1 <= limit <= 1000: raise ValueError("limit must be between 1 and 1000")
+        with self.sessions() as db:
+            return list(db.scalars(select(ImprovementRecord).order_by(ImprovementRecord.created_at.desc()).limit(limit)))
+
+    def save_agent_state(self, agent_id: str, role: str, state: dict):
+        with self.sessions() as db:
+            row = db.get(AgentStateRecord, agent_id)
+            if row is None:
+                row = AgentStateRecord(agent_id=agent_id, role=role, state=state); db.add(row)
+            else:
+                row.role, row.state = role, state
+            db.commit(); return row
+
+    def get_agent_state(self, agent_id: str):
+        with self.sessions() as db: return db.get(AgentStateRecord, agent_id)
+
+    def audit_status(self):
+        from .models import AuditRecord
+        with self.sessions() as db:
+            rows = list(db.scalars(select(AuditRecord).order_by(AuditRecord.sequence.asc())))
+        import hashlib, json
+        previous = "0" * 64
+        valid = True
+        verified = 0
+        for row in rows:
+            if row.previous_hash.strip() != previous or not row.event_time:
+                valid = False
+                break
+            body = {"event": row.event, "actor": row.actor, "details": row.details,
+                    "prev": row.previous_hash.strip(), "time": float(row.event_time)}
+            digest = hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+            if digest != row.event_hash.strip():
+                valid = False
+                break
+            previous = row.event_hash.strip()
+            verified += 1
+        return {"connected": True, "valid": valid, "count": len(rows), "verified": verified, "last_hash": previous}

@@ -32,6 +32,7 @@ def prepare(monkeypatch):
     monkeypatch.setattr(main, "DB_REPOSITORY", None)
     monkeypatch.setattr(main, "REDIS_STORE", None)
     monkeypatch.setattr(main.AUDIT, "db_writer", None)
+    main.AUDIT.path.write_text("", encoding="utf-8")
     monkeypatch.delenv("CRI_DATABASE_URL", raising=False)
     monkeypatch.delenv("CRI_REDIS_URL", raising=False)
 
@@ -63,7 +64,7 @@ def test_lifespan_connects_configured_database_redis_and_opa(monkeypatch):
             assert main.DB_REPOSITORY is repo
             assert main.REDIS_STORE is not None
             assert opa.calls == 1
-            main.AUDIT.db_writer({"event": "x", "actor": "a", "details": {}, "prev": "0" * 64, "hash": "1" * 64})
+            main.AUDIT.db_writer({"event": "x", "actor": "a", "details": {}, "prev": "0" * 64, "hash": "1" * 64, "time": 123.0})
             assert len(repo.appended) == 1
     asyncio.run(run())
     assert engine.disposed and redis_client.closed

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "cri-prototype"
 version = "1.0.0"
@@ -20,3 +24,6 @@ cri-audit = "cri.cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
+[tool.setuptools]
+packages = { find = { where = ["."], include = ["cri", "cri.*"], namespaces = false } }

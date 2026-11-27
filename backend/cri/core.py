@@ -43,8 +43,8 @@ class Audit:
         self.lock_path = self.path.with_suffix(self.path.suffix + ".lock")
         self.remote_sink = None
         self.db_writer = None
-        remote_url = os.getenv("CRI_AUDIT_REMOTE_URL")
-        remote_token = os.getenv("CRI_AUDIT_REMOTE_TOKEN", "")
+        remote_url = os.getenv("CRI_AUDIT_REMOTE_URL") or os.getenv("AUDIT_WORM_URL")
+        remote_token = os.getenv("CRI_AUDIT_REMOTE_TOKEN") or os.getenv("AUDIT_WORM_TOKEN", "")
         if remote_url:
             from .integrations.external_audit import ExternalAuditSink
             self.remote_sink = ExternalAuditSink(remote_url, remote_token)
@@ -375,21 +375,58 @@ class Memory:
 
 
 class Workflow:
-    def __init__(self, audit, policy, kill, tokens, sandbox):
+    def __init__(self, audit, policy, kill, tokens, sandbox, developer=None):
         self.a, self.p, self.k, self.t, self.s = audit, policy, kill, tokens, sandbox
+        from .agents.developer import Developer
+        self.developer = developer or Developer()
         self.items = {}
         self.repository = None
 
     def _persist(self, proposal):
         if self.repository is not None:
-            self.repository.save_task(proposal["id"], proposal["goal"], proposal["status"], {"filename": proposal.get("filename"), "code_sha256": proposal.get("code_sha256"), "test": proposal.get("test")})
+            # Persist the complete reviewable proposal so API restarts do not
+            # leave database tasks that cannot be tested or approved.
+            data = {
+                "filename": proposal.get("filename"),
+                "code_sha256": proposal.get("code_sha256"),
+                "code": proposal.get("code"),
+                "test": proposal.get("test"),
+            }
+            self.repository.save_task(
+                proposal["id"], proposal["goal"], proposal["status"], data
+            )
+
+    def restore(self):
+        """Rehydrate workflow state from durable storage during API startup."""
+        if self.repository is None:
+            return 0
+        restored = 0
+        list_tasks = getattr(self.repository, "list_tasks", None)
+        if not callable(list_tasks):
+            return 0
+        for row in list_tasks(limit=500):
+            data = row.proposal or {}
+            code = data.get("code")
+            if not isinstance(code, str) or not code:
+                # Legacy rows without source are visible but cannot be executed.
+                continue
+            self.items[row.id] = {
+                "id": row.id,
+                "goal": row.goal,
+                "filename": data.get("filename", "proposal.py"),
+                "code_sha256": data.get("code_sha256"),
+                "code": code,
+                "status": row.status,
+                "test": data.get("test"),
+            }
+            restored += 1
+        return restored
 
     def create(self, goal):
         self.k.check()
         self.p.check(self.p.identity("master", "master"), "propose")
         pid = uuid.uuid4().hex
-        from .agents.developer import Developer
-        draft = Developer().generate(goal)
+        draft = self.developer.generate(goal)
         code = draft.content
         self.items[pid] = {
             "id": pid,
@@ -426,11 +463,13 @@ class Workflow:
             self.a.add(
                 "sandbox.unavailable", "testing", {"id": pid, "reason": str(exc)}
             )
+            self._persist(proposal)
             raise
         except Exception as exc:
             proposal["status"] = "failed"
             proposal["test"] = {"error": str(exc)}
             self.a.add("test.failed", "testing", {"id": pid, "reason": str(exc)})
+            self._persist(proposal)
             raise
         proposal["test"] = result
         proposal["status"] = "tested" if result["returncode"] == 0 else "failed"

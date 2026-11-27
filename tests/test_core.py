@@ -2,6 +2,12 @@ import pytest
 from cri.core import Audit, Policy, Denied, Tokens, Kill, Memory, Workflow
 
 
+class FakeDeveloper:
+    def generate(self, specification, filename="generated_module.py"):
+        import hashlib
+        content = "def run(context):\n    return {\"ok\": True}\n"
+        return type("Draft", (), {"content": content, "filename": filename, "sha256": hashlib.sha256(content.encode()).hexdigest()})()
+
 class FakeSandbox:
     def run(self, code):
         return {"returncode": 0, "stdout": "ok", "stderr": ""}
@@ -55,7 +61,7 @@ def test_promotion_requires_separate_human_token(tmp_path):
     policy = Policy(audit)
     kill = Kill(str(tmp_path / "KILL"))
     tokens = Tokens("z" * 32, nonce_db=str(tmp_path / "nonces.sqlite3"))
-    workflow = Workflow(audit, policy, kill, tokens, FakeSandbox())
+    workflow = Workflow(audit, policy, kill, tokens, FakeSandbox(), FakeDeveloper())
     proposal = workflow.create("sample goal")
     workflow.test(proposal["id"])
     with pytest.raises(Denied):
@@ -79,7 +85,7 @@ def test_promoted_proposal_cannot_be_tested_again(tmp_path):
     audit = Audit(tmp_path / "audit.jsonl")
     policy = Policy(audit)
     tokens = Tokens("r" * 32, nonce_db=tmp_path / "nonces.sqlite")
-    workflow = Workflow(audit, policy, Kill(tmp_path / "KILL"), tokens, FakeSandbox())
+    workflow = Workflow(audit, policy, Kill(tmp_path / "KILL"), tokens, FakeSandbox(), FakeDeveloper())
     proposal = workflow.create("bounded proposal")
     workflow.test(proposal["id"])
     token = workflow.issue_human_token(proposal["id"])
@@ -92,7 +98,7 @@ def test_approval_reason_is_required(tmp_path):
     audit = Audit(tmp_path / "audit.jsonl")
     policy = Policy(audit)
     tokens = Tokens("r" * 32, nonce_db=tmp_path / "nonces.sqlite")
-    workflow = Workflow(audit, policy, Kill(tmp_path / "KILL"), tokens, FakeSandbox())
+    workflow = Workflow(audit, policy, Kill(tmp_path / "KILL"), tokens, FakeSandbox(), FakeDeveloper())
     proposal = workflow.create("bounded proposal")
     workflow.test(proposal["id"])
     token = workflow.issue_human_token(proposal["id"])

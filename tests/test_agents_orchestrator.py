@@ -35,6 +35,11 @@ def test_all_six_agents_have_role_checked_lifecycle(tmp_path):
     }
     for role, payload in expected.items():
         agent = factory.create_root(role, role)
+        if role == "developer":
+            from cri.agents.developer import DeveloperUnavailable
+            with pytest.raises(DeveloperUnavailable):
+                agent.execute("task-1", payload)
+            continue
         result = agent.execute("task-1", payload)
         assert result.status == "completed" and result.agent == role
         assert agent.history[-1] == result

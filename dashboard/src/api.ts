@@ -1,5 +1,5 @@
 export type AuditState = { valid: boolean; count: number };
-export type ApiState = { connected: boolean; status?: string; audit?: AuditState; sandbox?: string; database?: string; redis?: string; opa?: string; remote_audit?: string; host_watchdog?: string; error?: string };
+export type ApiState = { connected: boolean; status?: string; audit?: AuditState; sandbox?: string; database?: string; database_audit?: {connected:boolean;valid:boolean;count:number;verified?:number}; redis?: string; opa?: string; remote_audit?: string; host_watchdog?: string; error?: string };
 export type Agent = { name: string; role: string; implemented: boolean; status: string; capabilities: string[] };
 export type AuditEvent = { event: string; actor: string; details: Record<string, unknown>; time: number; hash: string };
 export type Proposal = { id: string; goal: string; code: string; status: string; test: { returncode?: number; stdout?: string; stderr?: string; error?: string } | null };
@@ -35,3 +35,20 @@ export const issueApprovalToken = (id: string) => request<{token:string}>(`/api/
 export const decideApproval = (payload: {proposal_id:string;decision:'approve'|'reject';reason:string;token:string}) => request<Proposal>('/api/approvals',{method:'POST',body:JSON.stringify(payload)});
 export const setKillSwitch = (active: boolean) => request<{status:string}>(active?'/api/kill':'/api/restart',{method:'POST'});
 export const saveMemory = (kind:string,text:string) => request('/api/memory',{method:'POST',body:JSON.stringify({kind,text})});
+
+/** Authenticated one-time WebSocket ticket; the admin bearer token is never put in a URL. */
+export async function connectLive(onMessage: (value: unknown) => void, onState?: (state: string) => void): Promise<WebSocket> {
+  const { ticket } = await request<{ticket:string;expires_in:number}>('/api/ws-ticket', {method:'POST'});
+  const apiUrl = new URL(base || window.location.origin, window.location.origin);
+  apiUrl.protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  apiUrl.pathname = `${apiUrl.pathname.replace(/\/$/, '')}/api/ws`;
+  apiUrl.search = new URLSearchParams({ticket}).toString();
+  const socket = new WebSocket(apiUrl.toString());
+  socket.onopen = () => onState?.('connected');
+  socket.onclose = () => onState?.('disconnected');
+  socket.onerror = () => onState?.('error');
+  socket.onmessage = event => {
+    try { onMessage(JSON.parse(event.data)); } catch { onState?.('invalid_message'); }
+  };
+  return socket;
+}

@@ -6,6 +6,9 @@ export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 : "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}"
 : "${CRI_APP_PASSWORD:?Set CRI_APP_PASSWORD}"
 : "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"
+: "${CRI_LLM_BASE_URL:?Set CRI_LLM_BASE_URL}"
+: "${CRI_LLM_API_KEY:?Set CRI_LLM_API_KEY}"
+: "${CRI_LLM_MODEL:?Set CRI_LLM_MODEL}"
 mkdir -p artifacts
 cleanup() {
   docker compose down --volumes --remove-orphans > artifacts/e2e-cleanup.log 2>&1 || true

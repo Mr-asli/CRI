@@ -43,3 +43,16 @@
 - Added dashboard Docker packaging, Nginx API reverse proxy, full Compose topology, and GitHub Actions integration/E2E/dashboard jobs.
 - Expanded local test suite to 70 passing tests with 86% backend statement coverage.
 - Documented unverified infrastructure and deployment gates; no live Docker/DB/OPA/npm/GitHub run is claimed.
+
+
+## 2026-11-27 — implementation hardening revision
+
+- Replaced template-only Developer output with an HTTPS OpenAI-compatible provider client; source is syntax-checked, bounded, and remains untrusted draft data.
+- Added Redis bounded queue and agent heartbeat primitives.
+- Added durable improvement and agent-state tables, plus migrations 0003 and 0004.
+- Added a privileged migration runner that removes its migration URL before Uvicorn starts.
+- Made PostgreSQL Audit replay idempotent and added event timestamp persistence/hash recomputation.
+- Added authenticated one-time WebSocket tickets and dashboard WebSocket client support.
+- Added Railway deployment configuration and service topology guidance.
+- Expanded suite to 75 passing Python tests and retained the 85% CI coverage floor.
+- npm ci timed out; Docker, live infrastructure, Railway and GitHub Actions remain unverified.

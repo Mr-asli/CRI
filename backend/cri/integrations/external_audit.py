@@ -1,4 +1,4 @@
-"""Remote audit forwarder. Durability/immutability must be enforced by the receiver."""
+"""HTTPS WORM collector forwarder. The receiving service must enforce immutable retention."""
 import hashlib, hmac, json
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError

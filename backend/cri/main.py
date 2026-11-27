@@ -1,11 +1,15 @@
 import hmac
 import os
+import secrets
+import time
+import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
+from .self_improvement import ImprovementWorkflow
 from .core import (
     Audit,
     Denied,
@@ -18,6 +22,7 @@ from .core import (
     Workflow,
 )
 from .agents import AgentFactory
+from .agents.developer import DeveloperUnavailable
 from .agents.factory import AGENT_TYPES
 from .tools import ToolGateway, ToolSpec
 from .integrations.opa import OPAClient, OPAUnavailable, OPADenied, OPAPolicy
@@ -28,7 +33,8 @@ DATA = os.getenv("CRI_DATA_DIR", "./data")
 ADMIN_TOKEN = os.getenv("CRI_ADMIN_TOKEN", "")
 APPROVAL_SECRET = os.getenv("CRI_APPROVAL_SECRET", "")
 AUDIT = Audit(os.getenv("CRI_AUDIT_FILE", DATA + "/audit.jsonl"))
-OPA = OPAClient(os.environ["CRI_OPA_URL"]) if os.getenv("CRI_OPA_URL") else None
+OPA_URL = os.getenv("CRI_OPA_URL") or os.getenv("OPA_URL")
+OPA = OPAClient(OPA_URL) if OPA_URL else None
 LOCAL_POLICY = Policy(AUDIT)
 POLICY = OPAPolicy(LOCAL_POLICY, OPA) if OPA is not None else LOCAL_POLICY
 KILL = Kill(os.getenv("CRI_KILL_FILE", DATA + "/KILL"))
@@ -42,11 +48,15 @@ TOKENS = (
     else None
 )
 FLOW = Workflow(AUDIT, POLICY, KILL, TOKENS, Sandbox()) if TOKENS else None
+IMPROVEMENT_WORKFLOW = ImprovementWorkflow(AUDIT, TOKENS) if TOKENS else None
 GATEWAY = ToolGateway(POLICY, AUDIT, KILL)
 def _write_memory(payload):
     record = MEMORY.write("lesson", payload["text"])
     if DB_REPOSITORY is not None:
         DB_REPOSITORY.save_memory(record["kind"], record["text"])
+    if REDIS_STORE is not None:
+        REDIS_STORE.delete("memory:list")
+        REDIS_STORE.put("memory:last", record, 3600)
     return record
 
 GATEWAY.register(
@@ -55,6 +65,7 @@ GATEWAY.register(
 AGENT_FACTORY = AgentFactory(POLICY, GATEWAY)
 DB_REPOSITORY = None
 REDIS_STORE = None
+WS_TICKETS = {}
 
 
 @asynccontextmanager
@@ -67,23 +78,44 @@ async def lifespan(app):
 
     engine = None
     redis_client = None
-    database_url = os.getenv("CRI_DATABASE_URL")
+    database_url = os.getenv("CRI_DATABASE_URL") or os.getenv("DATABASE_URL")
     if database_url:
         engine = get_engine(database_url)
         with engine.connect() as connection:
             connection.exec_driver_sql("SELECT 1")
             if connection.dialect.name == "postgresql":
-                migrated = connection.exec_driver_sql("SELECT to_regclass('public.tasks')").scalar()
-                if migrated is None:
-                    raise RuntimeError("database schema is not migrated; apply backend/alembic/versions before startup")
+                required = connection.exec_driver_sql("""
+                    SELECT
+                      to_regclass('public.tasks') IS NOT NULL
+                      AND to_regclass('public.audit_events') IS NOT NULL
+                      AND to_regclass('public.memory_records') IS NOT NULL
+                      AND to_regclass('public.improvement_records') IS NOT NULL
+                      AND to_regclass('public.agent_states') IS NOT NULL
+                      AND EXISTS (SELECT 1 FROM information_schema.columns
+                                  WHERE table_schema='public' AND table_name='audit_events' AND column_name='event_time')
+                """).scalar()
+                if not required:
+                    raise RuntimeError("database schema is not current; run the CRI migration runner before startup")
         DB_REPOSITORY = SQLRepository(session_factory(engine))
         AUDIT.db_writer = lambda row: DB_REPOSITORY.append_audit(
-            row["event"], row["actor"], row["details"], row["prev"], row["hash"]
+            row["event"], row["actor"], row["details"], row["prev"], row["hash"], row["time"]
         )
+        # Replay local events idempotently after reconnecting to PostgreSQL.
+        for pending_row in AUDIT.rows():
+            if AUDIT.remote_sink is not None:
+                AUDIT.remote_sink.append(pending_row)
+            DB_REPOSITORY.append_audit(
+                pending_row["event"], pending_row["actor"], pending_row["details"],
+                pending_row["prev"], pending_row["hash"], pending_row["time"]
+            )
         if FLOW is not None:
             FLOW.repository = DB_REPOSITORY
+            FLOW.restore()
+        if IMPROVEMENT_WORKFLOW is not None:
+            IMPROVEMENT_WORKFLOW.repository = DB_REPOSITORY
+            IMPROVEMENT_WORKFLOW.restore()
 
-    redis_url = os.getenv("CRI_REDIS_URL")
+    redis_url = os.getenv("CRI_REDIS_URL") or os.getenv("REDIS_URL")
     if redis_url:
         try:
             import redis
@@ -156,14 +188,49 @@ def status_view():
         "status": "stopped" if KILL.active() else "enabled",
         "control_plane": "reachable",
         "audit": AUDIT.verify(),
-        "sandbox": "configured" if sandbox.docker_binary and "@sha256:" in sandbox.image else "unavailable",
+        "sandbox": "configured_not_verified" if sandbox.docker_binary and "@sha256:" in sandbox.image else "unavailable",
         "execution_guarantee": "not_independently_supervised",
         "database": "connected" if DB_REPOSITORY is not None else "not_configured",
+        "database_audit": DB_REPOSITORY.audit_status() if DB_REPOSITORY is not None else {"connected": False, "valid": False, "count": 0},
         "redis": "connected" if REDIS_STORE is not None else "not_configured",
         "opa": "configured" if OPA is not None else "not_configured",
-        "remote_audit": "configured" if AUDIT.remote_sink is not None else "not_configured",
+        "remote_audit": "configured_receiver_not_verified" if AUDIT.remote_sink is not None else "not_configured",
         "host_watchdog": "deployment_required",
     }
+
+
+@app.post("/api/ws-ticket")
+def create_ws_ticket(_admin=Depends(require_admin)):
+    now = time.time()
+    for key, expiry in list(WS_TICKETS.items()):
+        if expiry < now: WS_TICKETS.pop(key, None)
+    ticket = secrets.token_urlsafe(32)
+    WS_TICKETS[ticket] = now + 30
+    return {"ticket": ticket, "expires_in": 30}
+
+
+@app.websocket("/api/ws")
+async def live_updates(websocket: WebSocket):
+    ticket = websocket.query_params.get("ticket", "")
+    expiry = WS_TICKETS.pop(ticket, 0) if ticket else 0
+    if not expiry or expiry < time.time():
+        await websocket.close(code=4401)
+        return
+    await websocket.accept()
+    try:
+        while True:
+            state = {
+                "type": "snapshot",
+                "status": "stopped" if KILL.active() else "enabled",
+                "audit": AUDIT.verify(),
+                "database_audit": DB_REPOSITORY.audit_status() if DB_REPOSITORY is not None else None,
+                "agents": [role for role in AGENT_TYPES],
+                "timestamp": time.time(),
+            }
+            await websocket.send_json(state)
+            await asyncio.sleep(5)
+    except WebSocketDisconnect:
+        return
 
 
 @app.get("/api/agents")
@@ -195,9 +262,20 @@ def run_agent(role: str, payload: dict, _admin=Depends(require_admin)):
         raise HTTPException(423, str(exc)) from exc
     if role not in AGENT_TYPES:
         raise HTTPException(404, "unknown agent role")
+    task_id = os.urandom(16).hex()
+    state = {"role": role, "status": "running"}
+    if DB_REPOSITORY is not None:
+        DB_REPOSITORY.save_agent_state(task_id, role, state)
+    if REDIS_STORE is not None:
+        REDIS_STORE.heartbeat(task_id, state, 120)
     try:
         agent = AGENT_FACTORY.create_root(f"admin-invoked-{role}", role)
-        result = agent.execute(os.urandom(8).hex(), payload)
+        result = agent.execute(task_id, payload)
+        completed_state = {"role": role, "status": result.status}
+        if DB_REPOSITORY is not None:
+            DB_REPOSITORY.save_agent_state(task_id, role, completed_state)
+        if REDIS_STORE is not None:
+            REDIS_STORE.heartbeat(task_id, completed_state, 120)
         AUDIT.add(
             "agent.task_completed",
             role,
@@ -209,7 +287,15 @@ def run_agent(role: str, payload: dict, _admin=Depends(require_admin)):
             "status": result.status,
             "output": result.output,
         }
+    except DeveloperUnavailable as exc:
+        failed_state = {"role": role, "status": "provider_unavailable"}
+        if DB_REPOSITORY is not None: DB_REPOSITORY.save_agent_state(task_id, role, failed_state)
+        if REDIS_STORE is not None: REDIS_STORE.heartbeat(task_id, failed_state, 120)
+        raise HTTPException(503, str(exc)) from exc
     except (Denied, ValueError, RuntimeError) as exc:
+        failed_state = {"role": role, "status": "failed"}
+        if DB_REPOSITORY is not None: DB_REPOSITORY.save_agent_state(task_id, role, failed_state)
+        if REDIS_STORE is not None: REDIS_STORE.heartbeat(task_id, failed_state, 120)
         raise HTTPException(403, str(exc)) from exc
 
 
@@ -236,6 +322,8 @@ def create_task(x: Goal, _admin=Depends(require_admin)):
         result = FLOW.create(x.goal)
         if REDIS_STORE is not None: REDIS_STORE.delete("tasks:list")
         return result
+    except DeveloperUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(423, str(exc)) from exc
     except Denied as exc:
@@ -318,9 +406,17 @@ def logs(_admin=Depends(require_admin)):
 
 @app.get("/api/memory")
 def read_memory(_admin=Depends(require_admin)):
+    if REDIS_STORE is not None:
+        cached = REDIS_STORE.get("memory:list")
+        if cached is not None:
+            return cached
     if DB_REPOSITORY is not None:
-        return [{"kind": row.kind, "text": row.content, "metadata": row.metadata_json, "created_at": row.created_at.isoformat()} for row in DB_REPOSITORY.list_memory()]
-    return MEMORY.data
+        result = [{"kind": row.kind, "text": row.content, "metadata": row.metadata_json, "created_at": row.created_at.isoformat()} for row in DB_REPOSITORY.list_memory()]
+    else:
+        result = MEMORY.data
+    if REDIS_STORE is not None:
+        REDIS_STORE.put("memory:list", result, 30)
+    return result
 
 
 class MemoryInput(BaseModel):
@@ -334,6 +430,9 @@ def write_memory(x: MemoryInput, _admin=Depends(require_admin)):
         record = MEMORY.write(x.kind, x.text)
         if DB_REPOSITORY is not None:
             DB_REPOSITORY.save_memory(record["kind"], record["text"])
+        if REDIS_STORE is not None:
+            REDIS_STORE.delete("memory:list")
+            REDIS_STORE.put("memory:last", record, 3600)
         AUDIT.add("memory.write", "human-admin", {"kind": x.kind})
         return record
     except ValueError as exc:
