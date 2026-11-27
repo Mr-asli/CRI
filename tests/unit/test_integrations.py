@@ -272,3 +272,57 @@ def test_developer_provider_failures_are_logged_safely(caplog):
     assert "cri.llm" in caplog.text or any(
         record.name == "cri.llm" for record in caplog.records
     )
+
+def test_developer_retries_transient_http_failures(monkeypatch):
+    import json
+    from urllib.error import HTTPError
+    from cri.agents.developer import Developer
+
+    attempts = []
+    delays = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps({
+                "choices": [{
+                    "message": {
+                        "content": "def generated():\n    return True"
+                    }
+                }]
+            }).encode()
+
+    def fake_opener(request, timeout):
+        attempts.append(timeout)
+        if len(attempts) < 3:
+            raise HTTPError(
+                "https://llm.example",
+                503,
+                "unavailable",
+                None,
+                None
+            )
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "cri.agents.developer.time.sleep",
+        lambda delay: delays.append(delay)
+    )
+
+    developer = Developer(
+        "https://llm.example/v1",
+        "k" * 32,
+        "test-model",
+        opener=fake_opener,
+    )
+
+    draft = developer.generate("create a simple module")
+
+    assert draft.status == "draft_only"
+    assert len(attempts) == 3
+    assert delays == [1, 2]

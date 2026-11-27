@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import time
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
@@ -55,10 +56,19 @@ class Developer:
         request = Request(url, data=json.dumps(payload).encode(), headers={
             "Authorization": "Bearer " + self.api_key, "Content-Type": "application/json"}, method="POST")
         try:
-            with self.opener(request, timeout=self.timeout) as response:
-                result = json.loads(response.read().decode("utf-8"))
+            for attempt in range(3):
+                try:
+                    with self.opener(request, timeout=self.timeout) as response:
+                        result = json.loads(response.read().decode("utf-8"))
+                    break
+                except HTTPError as exc:
+                    if exc.code in (502, 503, 504) and attempt < 2:
+                        exc.close()
+                        time.sleep(2 ** attempt)
+                        continue
+                    raise
         except (HTTPError, URLError, TimeoutError, OSError, ValueError) as exc:
-            # LLM_PROVIDER_DIAGNOSTIC: log safe provider failure metadata only.
+            # Log safe provider failure metadata only.
             import logging
             if isinstance(exc, HTTPError):
                 logging.getLogger("cri.llm").error(
@@ -74,7 +84,9 @@ class Developer:
                     "LLM provider failure: type=%s",
                     type(exc).__name__
                 )
-            raise DeveloperUnavailable("configured LLM provider failed; no code draft produced") from exc
+            raise DeveloperUnavailable(
+                "configured LLM provider failed; no code draft produced"
+            ) from exc
         try:
             content = result["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
