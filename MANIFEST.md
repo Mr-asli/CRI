@@ -1,24 +1,26 @@
 # File manifest — CRI v1.0 candidate source package
 
-Files covered: 108 (manifest excludes itself)
+Archive inventory: 115 regular files and 26 directory entries (including the `CRI-main/` root directory); 141 ZIP entries total. This manifest excludes itself from the hashed-file list.
+
+Files covered: 114 (manifest excludes itself)
 
 | File | SHA-256 |
 |---|---|
-| `.env.example` | `aa88f357e93e97f40c56ec1359b8ff4ea036a7875e9a43b8947635a26a26dbb5` |
-| `.github/workflows/ci.yml` | `e1e0098bcde5b658b4ea69cd9f1d53f52846319c8250f95f438e57c4e562965f` |
+| `.env.example` | `7f1783d0f902651e9aafee9d368584bc99c1a08d549763ea43020bf60f66fa0c` |
+| `.github/workflows/ci.yml` | `cb66a24b46a7c0f3dcf2e86ad09580a47aa3b66a5c074cb23d79ef949b9e96e3` |
 | `.github/workflows/manual-demo.yml` | `6d7e50db2db4dbd0d48a4dc13edf6881d32526af506018f7ded6605a93591b01` |
 | `.gitignore` | `0767c25e8a2a05b2ee418875c0a61d17dc11a07fe2b58edb6bb7fad5c1593722` |
-| `AUDIT_REPORT.md` | `10b889d6bac241f4b5039cfae000dd501acbefd4c8a59d5be5aea23a2e1139da` |
+| `AUDIT_REPORT.md` | `464d367a3318a4198a4ff4f9d86ac64a3cb95f57da32b2d85f5c77e6277581ad` |
 | `BASELINE_AUDIT.md` | `46aad2cfdf1530d3aa62266ad0a4c4367ce18cb3a473feeacf5278be94302200` |
-| `BLOCKERS.md` | `5739e94db67ac3fb80a6134ddde189a5f6778e5f2b8b99e266ed9c52652bed36` |
+| `BLOCKERS.md` | `847388bffc96022610710aaee9b8836d499614fc6366b2cf85298e480c9a03cd` |
 | `CHANGELOG.md` | `ecf2415364a7852e65f39673090b0f2cdce1d81055af5f46ae4a3b4e33c9b1d2` |
-| `IMPLEMENTATION_REPORT.md` | `fb4b508b7a5500e3a71f9ba251d523012444571d285c3892c3d21d13f9ab677e` |
+| `IMPLEMENTATION_REPORT.md` | `8587cd59126fce7312e5e59532096f4b0fc297e62c7cfb116b2ad2c55a42da86` |
 | `Makefile` | `74d55c3a29be370c473947e2dc4ddbea702b4348f16ab2e696cb75a80bab3a39` |
 | `PHASE_REPORT.md` | `183363b70913fe79170e5dbeb42c36c1b9c5190ddd67814e1c011cdadbf9cb2e` |
-| `README.md` | `7ca1ef3947eadb76e0552bb34528b8b7dc8a9280bb03d11413ba07de9f8b24de` |
-| `SECURITY_TEST_REPORT.md` | `b4815e83d32117495e2a65a7f93b56fd8a290b35b16067b9856f9bc1caed0866` |
-| `STATUS.md` | `d3619aef6d4c0e8bdbeff114ab3bd4b1f441c6e71396f08792dc8205f15da0bf` |
-| `TEST_REPORT.md` | `29bd6c740a4e9875aa8ca3971f7eb859f9d643fe65c3ac7a3cc8307de9ac7633` |
+| `README.md` | `ebeaef2636b5900983d6d398c7814d9809816f942f90ccbf4bf7ee69f500cb53` |
+| `SECURITY_TEST_REPORT.md` | `825295ed1288f55c4a6bfc688c016697eff250dec6f623c8208056bdc006ec95` |
+| `STATUS.md` | `8f8cf364afa21072228940df837de7f2a97810d62af5e388a2226a4b015dec5e` |
+| `TEST_REPORT.md` | `cffeb9e41550a83734ae2910a191459ad35949095f1d5acbfd4e561ce170c093` |
 | `backend/Dockerfile` | `ccb1007ee90b49abc8d2ac5bc3f2988b070066910c57eb050c2d0c17f894800b` |
 | `backend/alembic/README.md` | `0b689b0dde79a89ad76a585eee792b0a07f378d7ca166805de8b835ce6398ea7` |
 | `backend/alembic/versions/0001_initial.sql` | `58128829d5b111889acbca743883a36f9a3202eb35a40dbebb6802870eb3ef87` |
@@ -28,25 +30,29 @@ Files covered: 108 (manifest excludes itself)
 | `backend/cri/__init__.py` | `3ddbdeeda4b1f6e84b58633630274f0eca2db1d3a38b46a85cdf21649cdc5f58` |
 | `backend/cri/agents/__init__.py` | `d9499423ddc7fb297c1a02cfe58eeb9fb86dae4f39e110943d09cddcdb1a304a` |
 | `backend/cri/agents/base.py` | `979d81646683008ad7890ee28ba6977c5989f7dd2bccaa2b06b5f488225482d3` |
-| `backend/cri/agents/developer.py` | `b6c6b96f2d4a2926dbf5f7e0d83085cfcfca2b1925a655e307723c448fb8c8a7` |
+| `backend/cri/agents/developer.py` | `f39e1b61af4764ba453af08ed41c1531bcd024eae6131de437bfaebd7659559a` |
 | `backend/cri/agents/factory.py` | `8e4da5f37478590ddf1c9a5e2be86ba3ded071b1b82ada0ee1948a4f8d705822` |
 | `backend/cri/cli.py` | `4e91a3912bb8ebc40363c0af78b8fb514f1022f6d00a8466c545e5c9dd1d036e` |
-| `backend/cri/core.py` | `37a11ccf40bba0240780ef4070a524a7a2f1d9b433406cfb569a72083a714cbd` |
+| `backend/cri/core.py` | `f0fc337d8397d53e9fa5cd1c62029f66d773f10b7803c4ec27eb4ebdb5387f52` |
 | `backend/cri/db/__init__.py` | `3212c6a1cfa12be25fe5aa80583a376ae8ae0c8f43ac13acec183e4ea72f99e5` |
 | `backend/cri/db/models.py` | `d70145d53335d93d3c5b3445c135936aa3465f0be84186b95c09a4939d9c03d1` |
 | `backend/cri/db/repository.py` | `f436f3d06a088f1a2325001e22ea858c8aebbc6f8e244e2add723fc0df25c5b0` |
 | `backend/cri/db/session.py` | `b48aa5eb8744b33604d75151cc45b03e8390f08b7f229792b22c26fea32c382a` |
 | `backend/cri/integrations/__init__.py` | `ab736d61d3a5e19fa9d52a5c92f7021027030f0a65f22e9d83b437f6cca2b764` |
-| `backend/cri/integrations/external_audit.py` | `a0c5786b2505b3b546ec13d81c00d9d1531d83ce42980f09f9272ed35a6222a6` |
-| `backend/cri/integrations/opa.py` | `20d16696dbed02c94ae22864dfac9f42210d603bdcd779c8beacb97315dcb153` |
-| `backend/cri/integrations/redis_store.py` | `043d37fd831f2b02654a080393da77eca881b851df8c9cbcbf84569eb61113c5` |
+| `backend/cri/integrations/external_audit.py` | `bbd85eff15f1c2c0c057d4e194247dde85f22dbf7800f0c87021fbd24a54af32` |
+| `backend/cri/integrations/opa.py` | `ef0d3792e5b8029514e89bd0943ad7ed973730d76d877aac40df50342de5edd5` |
+| `backend/cri/integrations/redis_store.py` | `cc7e141b317d41a010f6c14b43137211f34bec90da1d04406fbba3bd1bdf707e` |
+| `backend/cri/llm/__init__.py` | `22130b2b4fdddaad1fdebdfae622adcc42d4903fee8f0cd81c64ebdebd8ede69` |
+| `backend/cri/llm/adapters.py` | `22b4e4463a20bc4d67b14d67832d585dc58f32840130f05a4bfaf18c30bcd34c` |
+| `backend/cri/llm/gateway.py` | `bbe4d0c14ca2b271e7df1b26e062ac7c472daee02c0b6e6b6b449e1e203e4e8f` |
+| `backend/cri/llm/registry.py` | `660aa6af2c32a7bf4d279cc05ce620f859d222c2243bb2078daf96d4e69d633c` |
 | `backend/cri/main.py` | `def58c2474894c96de66e01a52acfdc8c6995b4e22ee571a565dea829c2edd57` |
 | `backend/cri/orchestration/__init__.py` | `509b603ac53b21ef84732e0ce6c3f124bd58f2dcd10501c65d74e71f51fc746d` |
 | `backend/cri/orchestration/dag.py` | `056d9faa182d364e14c5947f2dcd71d1911077174cb9fd940315f3950502ae1f` |
 | `backend/cri/self_improvement.py` | `00eaee2ee81895aefe3b72641735802b33b0abf9b2346b2e1dc24ee1d15989e0` |
 | `backend/cri/tools/__init__.py` | `7e376f7cc50a2b79cbd27c9261488cdb97afd14a8660ef943c576f7eef16fc5a` |
 | `backend/cri/tools/gateway.py` | `a4f33a49e3c6dfa86ad7fe7f1d362b902c195352851b90b3be443e9bd6ba6f02` |
-| `backend/pyproject.toml` | `d4339ff30bdf3b268a7ddbe2d5f4208c4c39a46ece2eb63e30d5ff4048dcfcef` |
+| `backend/pyproject.toml` | `965e5cfe3bc8a646e31228e7178e241da05b2486202237e479b802f165b3e6bb` |
 | `backend/scripts/migrate.py` | `152ffe10d27cbdc9229f9fbbaef299540396777a92bfbf3deac7196e6dd25143` |
 | `build_cri.sh` | `7fb94afd57b337ea9149fc070d006fbd39a91a417bcf70c444933b6e954ac4df` |
 | `dashboard/Dockerfile` | `eeda0dba792494701bd71757a31dce94b2088ea6699900acd6c065596dd75670` |
@@ -63,7 +69,7 @@ Files covered: 108 (manifest excludes itself)
 | `dashboard/tsconfig.json` | `919d9fc64f379a1fd5fba4395ad5ae64b583472706b16274fe1608878dd8a095` |
 | `dashboard/vite.config.ts` | `3f252801b1c664173c024e2432501756c7018f4f0e02ea4d622db0f9871e52dd` |
 | `docker-compose.test.yml` | `088eb8e639cf6ed6f52d9bb99aa1533c4b0ae9e8a8e5624639c493875e7af8ae` |
-| `docker-compose.yml` | `989fc172a6f76c86715a4ba6407c012de055754f0a35b8ca59fc76734254e1e3` |
+| `docker-compose.yml` | `4ba75786bd782e176883a0eb6ccabc03d40c702e7a6579181f393f2a24b7d928` |
 | `docs/ADR/0001-orchestration.md` | `028f2691aade0bdbeca23ee539c0f1e2c91eeb325062539a491bb23742d0e604` |
 | `docs/ADR/0002-sandbox.md` | `b8f4f04f6e1cf4d461e9603149569c5e4cc1134a8a42a8f7af1ff8323377595f` |
 | `docs/ADR/0003-audit.md` | `f6ce9c4392f6c54d0d41e66f083a60e7866553213b81bce1ea9e5f27d972a02f` |
@@ -81,6 +87,7 @@ Files covered: 108 (manifest excludes itself)
 | `docs/GITHUB_ACTIONS_GUIDE.md` | `7df6c08cc823d4e8b3bed4ae9d71929e36dd10e83c7b8c7f52f4871c2cd3f5dd` |
 | `docs/HOST_WATCHDOG.md` | `92f88643b16364deb454ebb51954a8cf73f63e2a83d9db9fb336738ae271ffff` |
 | `docs/INTEGRATIONS.md` | `34ad464ccae19a9062504a20df009688ddfb1cfb999728551a8d79c80ec4b9f5` |
+| `docs/LLM_GATEWAY.md` | `7e57e23c9b998ee8cfaa012437a7a782d7aacc21dc1fccb3a8cce159f1abd71c` |
 | `docs/MANUAL_TEST_PLAN.md` | `ac2ccf5ba2466ed6bc579a3cebed056f369ce0ddeb0da1044ec6dfadb1136de1` |
 | `docs/OPERATIONS.md` | `43db504899cc9e80e7251ae9f55502cc0981a029c6df7a5dc7b6ff9aff11288b` |
 | `docs/OVERNIGHT_LOCKDOWN.md` | `1264e3af8311118a85544fd564f9acaeb23e2ea1ade46ff467a005d92f812dff` |
@@ -97,7 +104,7 @@ Files covered: 108 (manifest excludes itself)
 | `scripts/request-host-start.sh` | `fd828c1ab4e1dbcef88f0c6dd22add330c02e4e07ee3ea970089fee2987f1fad` |
 | `scripts/request-host-stop.sh` | `a1daaa5f477ab1d7804ebdcdfb6c6d4ae05691a164cd2b678b632023593319dc` |
 | `scripts/restore.sh` | `dcaf782b4454096a40adc5232107f2c185dba071627fd1e1954157be4fe23ca1` |
-| `scripts/run-e2e-demo.sh` | `d8b1f264070867c52cb2cd6188b242821db27505c8f33a6db018864668a30563` |
+| `scripts/run-e2e-demo.sh` | `bcd10091d9075596a7b5241cc3f2c08d3c5cc188882c447a861440a9375d8167` |
 | `scripts/run-kill-switch-test.sh` | `32c38654008a547c38ca788920196fee0765c5bc55f51fc3118e8aece2ed7054` |
 | `scripts/systemd/cri-agents.service` | `58af4199d1ec59cdfed87799545b5220bf7704a5938de3b1dace5b20dc10f104` |
 | `scripts/systemd/cri-watchdog.service` | `68f9b5e75a5cb938da694390598e0bc2515c98dfe1ea9e9975f4021065a785ae` |
@@ -109,6 +116,7 @@ Files covered: 108 (manifest excludes itself)
 | `tests/test_core.py` | `62ae6964a8e3789424a5a80fd0d550442027a73c8d27a6dc34e8a642ae2e1c32` |
 | `tests/test_orchestration_edges.py` | `4f32bf0ffc5a08c6cfe2cbf04a0ff61ae4141ae4a7003bbc3486e4fdbe3f3d8f` |
 | `tests/test_security.py` | `6072acb740d6e2000bd337afe438e86991c31745ab471eaf1ae4159edcbfc369` |
-| `tests/unit/test_integrations.py` | `6dbeebd76b6d741a4c5978d74ef73128fc05edf3614f2b2a4011fbf25da5e865` |
+| `tests/unit/test_integrations.py` | `d3ba5cd94810501e1960c508cb8d3d3859ac845f9a0d1d7cbd84f45d6f535d4b` |
 | `tests/unit/test_lifespan_integrations.py` | `b164f4abaaea02d4590e4ed1ef9916d7199d50bf09a450337081e2674575cd2d` |
+| `tests/unit/test_llm_gateway.py` | `14963e8def498d89e537c20be75610726027c762cb3c8cf1f633d92e1ae7af48` |
 | `tests/unit/test_watchdog.py` | `d0b393396355cb05a5af3d19921a0cbb269b6fcfd29f53f1e8f5ee59645403ce` |

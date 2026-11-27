@@ -2,8 +2,8 @@
 
 ## Local checks
 
-- Python security and regression tests are included in the **70 passing** test suite.
-- Backend statement coverage measured at **85%**.
+- Python security and regression tests are included in the **98 passing** full Python test suite (review run on Python 3.13.5).
+- Backend statement coverage measured at **86%** in the same run.
 - Secret-pattern scan found no embedded credential literals; matches were environment-variable references in Compose/docs.
 - Source package excludes runtime SQLite databases and generated audit state.
 

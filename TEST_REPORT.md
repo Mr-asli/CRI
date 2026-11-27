@@ -2,8 +2,8 @@
 
 ## Local results
 
-- Python test suite: **77 passed**.
-- Backend statement coverage: **85%** (coverage.py run; exact counts can vary with source changes), meeting the configured 85% threshold.
+- Python test suite: **98 passed** (review run on Python 3.13.5).
+- Backend statement coverage: **86%** in the same review run, meeting the configured 85% threshold.
 - Python bytecode compilation: completed successfully.
 - YAML parsing: both Compose files and both GitHub Actions workflows passed local YAML parsing; Docker execution itself was not run. Shell syntax checks passed.
 

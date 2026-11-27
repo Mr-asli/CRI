@@ -22,13 +22,13 @@ CRI is a governed multi-agent control-plane prototype. It is not certified for u
 
 ## Local verification in this package build
 
-- 77 Python tests passed.
-- 85% backend statement coverage (CI floor: 85%).
+- 98 Python tests passed in the review environment (Python 3.13.5).
+- 86% backend statement coverage in the same run (CI floor: 85%).
 - Python compileall passed.
 - Both Compose files and the GitHub Actions workflow parsed as YAML.
 - Workflow shell blocks passed `bash -n`.
 
-Docker/Compose, live PostgreSQL, Redis, OPA, npm build, browser acceptance, Railway deployment, and GitHub Actions were not executed in this environment. npm dependency installation timed out. See `TEST_REPORT.md` and `BLOCKERS.md`.
+Docker/Compose, live PostgreSQL, Redis, OPA, npm build, browser acceptance, Railway deployment, and GitHub Actions were not executed as part of this local review. See `TEST_REPORT.md` and `BLOCKERS.md`.
 
 ## Requirements
 
