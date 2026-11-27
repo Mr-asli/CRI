@@ -42,8 +42,7 @@ services:
     depends_on:
       api: {condition: service_healthy}
     read_only: true
-    tmpfs:
-      - /tmp:uid=101,gid=101,mode=0755
+    tmpfs: [/var/cache/nginx, /var/run]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: "no"
@@ -66,7 +65,7 @@ services:
       - -c
       - >-
         psql -v ON_ERROR_STOP=1 -h postgres -U cri_owner -d cri -f /migrations/0001_initial.sql
-        && psql -v ON_ERROR_STOP=1 -v app_password="$$CRI_APP_PASSWORD" -v database_name=cri -h postgres -U cri_owner -d cri -f /migrations/0002_runtime_role.sql
+        && psql -v ON_ERROR_STOP=1 -v app_password="$$CRI_APP_PASSWORD" -h postgres -U cri_owner -d cri -f /migrations/0002_runtime_role.sql
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       CRI_APP_PASSWORD: ${CRI_APP_PASSWORD:?Set CRI_APP_PASSWORD}

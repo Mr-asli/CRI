@@ -20,7 +20,3 @@ cri-audit = "cri.cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-
-[tool.setuptools.packages.find]
-include = ["cri*"]
-exclude = ["alembic*"]

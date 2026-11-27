@@ -67,7 +67,7 @@ async def lifespan(app):
 
     engine = None
     redis_client = None
-    database_url = os.getenv("CRI_DATABASE_URL") or os.getenv("DATABASE_URL")
+    database_url = os.getenv("CRI_DATABASE_URL")
     if database_url:
         engine = get_engine(database_url)
         with engine.connect() as connection:
@@ -82,7 +82,6 @@ async def lifespan(app):
         )
         if FLOW is not None:
             FLOW.repository = DB_REPOSITORY
-        FLOW.restore()
 
     redis_url = os.getenv("CRI_REDIS_URL")
     if redis_url:

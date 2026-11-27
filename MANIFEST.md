@@ -1,11 +1,11 @@
-# File manifest — CRI verified source package
+# File manifest — CRI final v1.0
 
-Files covered: 103 (manifest excludes itself)
+Files covered: 102
 
 | File | SHA-256 |
 |---|---|
 | `.env.example` | `7b333e3241b29401a94079b7cf9ca14b5d36fa1ec9982bc06c7065a214857c85` |
-| `.github/workflows/ci.yml` | `0a3687cf82bd3921c7d741a1e8e04db2c55019bac08ced19276456fdf14cc755` |
+| `.github/workflows/ci.yml` | `1ce4d2f485e218e604f5e315622fcd0ad78e1f76b0125e4a106a41be76340e94` |
 | `.github/workflows/manual-demo.yml` | `6d7e50db2db4dbd0d48a4dc13edf6881d32526af506018f7ded6605a93591b01` |
 | `.gitignore` | `0767c25e8a2a05b2ee418875c0a61d17dc11a07fe2b58edb6bb7fad5c1593722` |
 | `AUDIT_REPORT.md` | `2a8d7852e19eeb660983677656a232efa677e8d3600fe93faa903e9adc55eea7` |
@@ -16,20 +16,20 @@ Files covered: 103 (manifest excludes itself)
 | `Makefile` | `74d55c3a29be370c473947e2dc4ddbea702b4348f16ab2e696cb75a80bab3a39` |
 | `PHASE_REPORT.md` | `183363b70913fe79170e5dbeb42c36c1b9c5190ddd67814e1c011cdadbf9cb2e` |
 | `README.md` | `28024c3814059c8151c8a9ca5d2875a361e912672371f541d5d641e5f2b57700` |
-| `SECURITY_TEST_REPORT.md` | `b4815e83d32117495e2a65a7f93b56fd8a290b35b16067b9856f9bc1caed0866` |
-| `STATUS.md` | `16601e93b57201b164e1c2fee1edf4b85f058b4c7bb51ec32bb58b656f9f431f` |
-| `TEST_REPORT.md` | `bd30528f0ace2f47eae8acb4b9d48541e574623ffdacf4acf3b6c190213b9132` |
+| `SECURITY_TEST_REPORT.md` | `630dcaa28353a4882b56427e6d44ab40a60d72e9a3bc5224890683f705146d38` |
+| `STATUS.md` | `9eebbcd35ba81d087d36f437bed8f06b27ac0a6f51fae9073973702c66266466` |
+| `TEST_REPORT.md` | `f5f849ff6d0d3fefcafb047bd51813b9692d3ea6345fb893b5f522878822330f` |
 | `backend/Dockerfile` | `2e64c97ff325d9ebd7faf815e309babb0641f79eddd8ea6ef967c55aeb4672af` |
 | `backend/alembic/README.md` | `0b689b0dde79a89ad76a585eee792b0a07f378d7ca166805de8b835ce6398ea7` |
 | `backend/alembic/versions/0001_initial.sql` | `58128829d5b111889acbca743883a36f9a3202eb35a40dbebb6802870eb3ef87` |
-| `backend/alembic/versions/0002_runtime_role.sql` | `f0fab5738a7420498f2029e9f3885b8a694ca6a75ca0cf44d43ff5e2e63300da` |
+| `backend/alembic/versions/0002_runtime_role.sql` | `ee0c211045d128e232b6385cbf06874741c20e11843f924917ec04f4b624dc56` |
 | `backend/cri/__init__.py` | `3ddbdeeda4b1f6e84b58633630274f0eca2db1d3a38b46a85cdf21649cdc5f58` |
 | `backend/cri/agents/__init__.py` | `d9499423ddc7fb297c1a02cfe58eeb9fb86dae4f39e110943d09cddcdb1a304a` |
 | `backend/cri/agents/base.py` | `979d81646683008ad7890ee28ba6977c5989f7dd2bccaa2b06b5f488225482d3` |
 | `backend/cri/agents/developer.py` | `cc11856f708eebda5e527f809e7a34bebb018b1e55f13fd7c891069dabafa1ad` |
 | `backend/cri/agents/factory.py` | `8e4da5f37478590ddf1c9a5e2be86ba3ded071b1b82ada0ee1948a4f8d705822` |
 | `backend/cri/cli.py` | `4e91a3912bb8ebc40363c0af78b8fb514f1022f6d00a8466c545e5c9dd1d036e` |
-| `backend/cri/core.py` | `044e6cd4ecea7a2657587616d00e757878d6c29ce33194864e51280103baa87c` |
+| `backend/cri/core.py` | `6eb6d24404d878844a7ac63baf4f883eb400c1f5af43f47719688c9f4d065900` |
 | `backend/cri/db/__init__.py` | `3212c6a1cfa12be25fe5aa80583a376ae8ae0c8f43ac13acec183e4ea72f99e5` |
 | `backend/cri/db/models.py` | `292ad0e2c0a18927e78dd2e28f5b52edd486bfe349c967aed3aea6ae9023b704` |
 | `backend/cri/db/repository.py` | `c6bc5b6ad15009ab79ac4d485080073b6c7353a283cf2aa6375fd55e60ed5dbc` |
@@ -38,29 +38,28 @@ Files covered: 103 (manifest excludes itself)
 | `backend/cri/integrations/external_audit.py` | `1302fa2b87a0dbd810c2c84ab27a6e21b0f0f148299313d9baafaa8f3ba94e7d` |
 | `backend/cri/integrations/opa.py` | `20d16696dbed02c94ae22864dfac9f42210d603bdcd779c8beacb97315dcb153` |
 | `backend/cri/integrations/redis_store.py` | `3693d971a53d6b63722885f2ce96cd806042368870c6e51f46c271c652f2fcc9` |
-| `backend/cri/main.py` | `7eb3d6c75d8b26dc797edeb4d93e285fac0e8dbd95cd34fdc0db7a5fc49c117f` |
+| `backend/cri/main.py` | `beb8dd4a244475295b34f38cde3677c2a2088e37f1126f597d935dc880fa6e94` |
 | `backend/cri/orchestration/__init__.py` | `509b603ac53b21ef84732e0ce6c3f124bd58f2dcd10501c65d74e71f51fc746d` |
 | `backend/cri/orchestration/dag.py` | `056d9faa182d364e14c5947f2dcd71d1911077174cb9fd940315f3950502ae1f` |
 | `backend/cri/self_improvement.py` | `6614fc2571a523f84a93fa59cfe4d1f98302fa80a140224640d1a7eab290603c` |
 | `backend/cri/tools/__init__.py` | `7e376f7cc50a2b79cbd27c9261488cdb97afd14a8660ef943c576f7eef16fc5a` |
 | `backend/cri/tools/gateway.py` | `a4f33a49e3c6dfa86ad7fe7f1d362b902c195352851b90b3be443e9bd6ba6f02` |
-| `backend/pyproject.toml` | `a05df3d14c6b4eb34a7628ce4881aff133c0ba883da46975ed76ec667c7ceb5e` |
+| `backend/pyproject.toml` | `91f483b4bdbada48cd0cf7a64ba0e0a21dc290d304d4791010a000becf17194c` |
 | `build_cri.sh` | `7fb94afd57b337ea9149fc070d006fbd39a91a417bcf70c444933b6e954ac4df` |
 | `dashboard/Dockerfile` | `07133ee6be3f24b93813f37f8bcf55ae14c3ab77d734c369133043bda62ed599` |
 | `dashboard/index.html` | `48f4419234c1a4988ae98292b1a7f9710ab36716d25ffb5a099788564f9d3e77` |
 | `dashboard/nginx.conf` | `3d444f88674cb24b6e583d2ec50f6e27107eb56c011ab2c98cd1905df210aab9` |
-| `dashboard/package-lock.json` | `44a99d9fefac48f803e674cd9252a408fdf7e4cc368651e45f3e14a4d9547438` |
-| `dashboard/package.json` | `99a5aaad1ce6f0e399d5dfe08c22c7319d0005034a79d43c224f4ac9882c2d82` |
+| `dashboard/package.json` | `958e72f3341f9cb779e44b67e472c169112103a62ef9f824156b69b58b2f1379` |
 | `dashboard/src/api.ts` | `633069a12b4877640bb91829d7c2722de68a863b1f504f69e8837a2a9448740b` |
 | `dashboard/src/main.tsx` | `fceb1da8fac961e3a987b98f7fa48ba5d2bae302b81a0b5d16bc3455e25db874` |
-| `dashboard/src/pages/App.test.tsx` | `94c21fd9b95f16cd9d86fccdd143d61edcbacd9bd68bed545b98b7a79a4568a6` |
-| `dashboard/src/pages/App.tsx` | `79c910b3056c91c600aedc66145198a86f44db36a962b1c5bad695224ad7410d` |
+| `dashboard/src/pages/App.test.tsx` | `026bea7340ad3a5a13a9247ee52aaf00e598e24fa9bf22c805c199bd28af0ef2` |
+| `dashboard/src/pages/App.tsx` | `074eb89988eb7b377187907f00b7bb99d4cfef281eeff3aeb6675d86b05e47a6` |
 | `dashboard/src/style.css` | `e2730c12c49179ea8d41e5cde7f808cc4d328b19b2b4337bd45352127d1031b2` |
 | `dashboard/src/vite-env.d.ts` | `65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5` |
 | `dashboard/tsconfig.json` | `919d9fc64f379a1fd5fba4395ad5ae64b583472706b16274fe1608878dd8a095` |
 | `dashboard/vite.config.ts` | `3f252801b1c664173c024e2432501756c7018f4f0e02ea4d622db0f9871e52dd` |
 | `docker-compose.test.yml` | `088eb8e639cf6ed6f52d9bb99aa1533c4b0ae9e8a8e5624639c493875e7af8ae` |
-| `docker-compose.yml` | `09208c01af4e2dc5e62af8ffee2c833e1fb22bf82689c618450a914e24d2e3fe` |
+| `docker-compose.yml` | `1caf1424c7db9f335f4b642689c6de2fcb6c08d34bc8ede037cee3ee6e67123e` |
 | `docs/ADR/0001-orchestration.md` | `028f2691aade0bdbeca23ee539c0f1e2c91eeb325062539a491bb23742d0e604` |
 | `docs/ADR/0002-sandbox.md` | `b8f4f04f6e1cf4d461e9603149569c5e4cc1134a8a42a8f7af1ff8323377595f` |
 | `docs/ADR/0003-audit.md` | `f6ce9c4392f6c54d0d41e66f083a60e7866553213b81bce1ea9e5f27d972a02f` |

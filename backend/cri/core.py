@@ -382,43 +382,7 @@ class Workflow:
 
     def _persist(self, proposal):
         if self.repository is not None:
-            # Persist the complete reviewable proposal so API restarts do not
-            # leave database tasks that cannot be tested or approved.
-            data = {
-                "filename": proposal.get("filename"),
-                "code_sha256": proposal.get("code_sha256"),
-                "code": proposal.get("code"),
-                "test": proposal.get("test"),
-            }
-            self.repository.save_task(
-                proposal["id"], proposal["goal"], proposal["status"], data
-            )
-
-    def restore(self):
-        """Rehydrate workflow state from durable storage during API startup."""
-        if self.repository is None:
-            return 0
-        restored = 0
-        list_tasks = getattr(self.repository, "list_tasks", None)
-        if not callable(list_tasks):
-            return 0
-        for row in list_tasks(limit=500):
-            data = row.proposal or {}
-            code = data.get("code")
-            if not isinstance(code, str) or not code:
-                # Legacy rows without source are visible but cannot be executed.
-                continue
-            self.items[row.id] = {
-                "id": row.id,
-                "goal": row.goal,
-                "filename": data.get("filename", "proposal.py"),
-                "code_sha256": data.get("code_sha256"),
-                "code": code,
-                "status": row.status,
-                "test": data.get("test"),
-            }
-            restored += 1
-        return restored
+            self.repository.save_task(proposal["id"], proposal["goal"], proposal["status"], {"filename": proposal.get("filename"), "code_sha256": proposal.get("code_sha256"), "test": proposal.get("test")})
 
     def create(self, goal):
         self.k.check()
@@ -462,13 +426,11 @@ class Workflow:
             self.a.add(
                 "sandbox.unavailable", "testing", {"id": pid, "reason": str(exc)}
             )
-            self._persist(proposal)
             raise
         except Exception as exc:
             proposal["status"] = "failed"
             proposal["test"] = {"error": str(exc)}
             self.a.add("test.failed", "testing", {"id": pid, "reason": str(exc)})
-            self._persist(proposal)
             raise
         proposal["test"] = result
         proposal["status"] = "tested" if result["returncode"] == 0 else "failed"

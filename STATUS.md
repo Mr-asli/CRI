@@ -22,7 +22,7 @@ This statement means the integration code and CI jobs are included. It does **no
 ## Local verification performed
 
 - Python tests: 70 passed.
-- Backend statement coverage: 85% (measured locally with coverage.py; CI threshold: 85%).
+- Backend statement coverage: 86% (threshold used in CI: 85%).
 - Python compileall: passed.
 - YAML parse of both Compose files and CI workflow: passed.
 - Shell syntax checks for workflow run blocks: passed.
@@ -30,7 +30,7 @@ This statement means the integration code and CI jobs are included. It does **no
 ## Not certified / remaining deployment work
 
 - GitHub Actions has not been run from this environment; repository secrets and a real runner are required.
-- Dashboard npm install was attempted but could not complete in this environment; Vitest, TypeScript build, and Docker build therefore remain unverified.
+- Dashboard npm install, Vitest, TypeScript build, and Docker build were not run locally.
 - Docker sandbox execution was not run. The API container intentionally has no Docker socket; a dedicated remote sandbox worker/host with a restricted, authenticated execution API is required before enabling untrusted-code execution.
 - Host watchdog/systemd units are templates and must be installed and tested on a dedicated Linux host. The current API Kill Switch is an application admission latch; it is not wired to the privileged host stop file. The root operator stop script is the independent host control path.
 - A remote audit collector is optional and must be configured with `CRI_AUDIT_REMOTE_URL` and `CRI_AUDIT_REMOTE_TOKEN`; its server-side WORM guarantees require separate verification.
