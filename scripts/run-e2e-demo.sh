@@ -35,6 +35,11 @@ echo "CREATE TASK HTTP STATUS: $TASK_HTTP_STATUS"
 if [ "$TASK_HTTP_STATUS" != "200" ] && [ "$TASK_HTTP_STATUS" != "201" ]; then
   echo "CREATE TASK ERROR BODY:"
   cat artifacts/e2e-task-created.json
+
+  echo "API ERROR LOG:"
+  docker compose logs --no-color --tail=200 api > artifacts/e2e-api-error.log 2>&1 || true
+  cat artifacts/e2e-api-error.log
+
   exit 1
 fi
 TASK_ID="$(python -c 'import json; print(json.load(open("artifacts/e2e-task-created.json"))["id"])')"
