@@ -63,7 +63,7 @@ Files covered: 108 (manifest excludes itself)
 | `dashboard/tsconfig.json` | `919d9fc64f379a1fd5fba4395ad5ae64b583472706b16274fe1608878dd8a095` |
 | `dashboard/vite.config.ts` | `3f252801b1c664173c024e2432501756c7018f4f0e02ea4d622db0f9871e52dd` |
 | `docker-compose.test.yml` | `088eb8e639cf6ed6f52d9bb99aa1533c4b0ae9e8a8e5624639c493875e7af8ae` |
-| `docker-compose.yml` | `cd1d0c4a07f8091e8c2d402b0dd2fe1cb89e52039686d1141bed0b5e31735c15` |
+| `docker-compose.yml` | `989fc172a6f76c86715a4ba6407c012de055754f0a35b8ca59fc76734254e1e3` |
 | `docs/ADR/0001-orchestration.md` | `028f2691aade0bdbeca23ee539c0f1e2c91eeb325062539a491bb23742d0e604` |
 | `docs/ADR/0002-sandbox.md` | `b8f4f04f6e1cf4d461e9603149569c5e4cc1134a8a42a8f7af1ff8323377595f` |
 | `docs/ADR/0003-audit.md` | `f6ce9c4392f6c54d0d41e66f083a60e7866553213b81bce1ea9e5f27d972a02f` |

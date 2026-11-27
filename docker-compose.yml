@@ -52,6 +52,10 @@ services:
     read_only: true
     tmpfs:
       - /tmp:uid=101,gid=101,mode=0755
+      # nginx-unprivileged entrypoint renders API_UPSTREAM into this directory.
+      # Keep the container root filesystem read-only while allowing only this
+      # runtime configuration directory to be writable.
+      - /etc/nginx/conf.d:uid=101,gid=101,mode=0755
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: "no"
