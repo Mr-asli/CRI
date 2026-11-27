@@ -58,6 +58,23 @@ class Developer:
             with self.opener(request, timeout=self.timeout) as response:
                 result = json.loads(response.read().decode("utf-8"))
         except (HTTPError, URLError, TimeoutError, OSError, ValueError) as exc:
+            # LLM_PROVIDER_DIAGNOSTIC: log safe provider failure metadata only.
+            import logging
+            if isinstance(exc, HTTPError):
+                logging.getLogger("cri.llm").error(
+                    "LLM provider HTTP failure: status=%s reason=%s",
+                    exc.code, str(exc.reason)[:200]
+                )
+            elif isinstance(exc, URLError):
+                logging.getLogger("cri.llm").error(
+                    "LLM provider connection failure: reason=%s",
+                    str(exc.reason)[:200]
+                )
+            else:
+                logging.getLogger("cri.llm").error(
+                    "LLM provider failure: type=%s reason=%s",
+                    type(exc).__name__, str(exc)[:200]
+                )
             raise DeveloperUnavailable("configured LLM provider failed; no code draft produced") from exc
         try:
             content = result["choices"][0]["message"]["content"]
