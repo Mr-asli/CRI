@@ -27,6 +27,6 @@ describe('CRI dashboard', () => {
     render(<App />);
     fireEvent.click(await within(screen.getAllByRole('navigation', { name: 'Main navigation' })[0]).getByRole('button', { name: 'Security' }));
     expect(screen.getByText('Overnight Lockdown')).toBeTruthy();
-    expect(screen.getByText(/Host-level watchdog template included; not verified on this host./)).toBeTruthy();
+    expect(screen.getByText(/Host-level watchdog template included; host installation and verification are still required./)).toBeTruthy();
   });
 });

@@ -43,9 +43,13 @@ class Audit:
         self.lock_path = self.path.with_suffix(self.path.suffix + ".lock")
         self.remote_sink = None
         self.db_writer = None
-        remote_url = os.getenv("CRI_AUDIT_REMOTE_URL")
-        remote_token = os.getenv("CRI_AUDIT_REMOTE_TOKEN", "")
-        if remote_url:
+        remote_url = os.getenv("CRI_AUDIT_REMOTE_URL") or os.getenv("AUDIT_WORM_URL")
+        remote_token = os.getenv("CRI_AUDIT_REMOTE_TOKEN") or os.getenv("AUDIT_WORM_TOKEN", "")
+        s3_bucket = os.getenv("CRI_AUDIT_S3_BUCKET")
+        if s3_bucket:
+            from .integrations.external_audit import S3ObjectLockAuditSink
+            self.remote_sink = S3ObjectLockAuditSink.from_env()
+        elif remote_url:
             from .integrations.external_audit import ExternalAuditSink
             self.remote_sink = ExternalAuditSink(remote_url, remote_token)
 
@@ -375,8 +379,10 @@ class Memory:
 
 
 class Workflow:
-    def __init__(self, audit, policy, kill, tokens, sandbox):
+    def __init__(self, audit, policy, kill, tokens, sandbox, developer=None):
         self.a, self.p, self.k, self.t, self.s = audit, policy, kill, tokens, sandbox
+        from .agents.developer import Developer
+        self.developer = developer or Developer(audit=audit)
         self.items = {}
         self.repository = None
 
@@ -424,8 +430,7 @@ class Workflow:
         self.k.check()
         self.p.check(self.p.identity("master", "master"), "propose")
         pid = uuid.uuid4().hex
-        from .agents.developer import Developer
-        draft = Developer().generate(goal)
+        draft = self.developer.generate(goal)
         code = draft.content
         self.items[pid] = {
             "id": pid,

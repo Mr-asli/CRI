@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "cri-prototype"
 version = "1.0.0"
@@ -10,6 +14,7 @@ dependencies = [
   "psycopg[binary]==3.2.6",
   "pgvector==0.4.1",
   "redis==5.2.1",
+  "boto3>=1.35,<2",
 ]
 
 [project.optional-dependencies]
@@ -21,6 +26,5 @@ cri-audit = "cri.cli:main"
 [tool.pytest.ini_options]
 pythonpath = ["."]
 
-[tool.setuptools.packages.find]
-include = ["cri*"]
-exclude = ["alembic*"]
+[tool.setuptools]
+packages = { find = { where = ["."], include = ["cri", "cri.*"], namespaces = false } }

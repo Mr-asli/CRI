@@ -1,7 +1,9 @@
 services:
   api:
     image: cri-api:1.0.0
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     ports: ["127.0.0.1:8000:8000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/status', timeout=2)"]
@@ -21,6 +23,20 @@ services:
       CRI_OPA_URL: http://opa:8181
       CRI_AUDIT_REMOTE_URL: ${CRI_AUDIT_REMOTE_URL:-}
       CRI_AUDIT_REMOTE_TOKEN: ${CRI_AUDIT_REMOTE_TOKEN:-}
+      CRI_LLM_PROVIDER: ${CRI_LLM_PROVIDER:-openai-compatible}
+      CRI_LLM_BASE_URL: ${CRI_LLM_BASE_URL:-}
+      CRI_LLM_API_KEY: ${CRI_LLM_API_KEY:-}
+      CRI_LLM_MODEL: ${CRI_LLM_MODEL:-}
+      CRI_LLM_FALLBACK_PROVIDER: ${CRI_LLM_FALLBACK_PROVIDER:-}
+      CRI_LLM_FALLBACK_BASE_URL: ${CRI_LLM_FALLBACK_BASE_URL:-}
+      CRI_LLM_FALLBACK_API_KEY: ${CRI_LLM_FALLBACK_API_KEY:-}
+      CRI_LLM_FALLBACK_MODEL: ${CRI_LLM_FALLBACK_MODEL:-}
+      CRI_LLM_MAX_TOKENS: ${CRI_LLM_MAX_TOKENS:-4096}
+      CRI_LLM_TIMEOUT: ${CRI_LLM_TIMEOUT:-60}
+      CRI_LLM_RETRIES: ${CRI_LLM_RETRIES:-2}
+      CRI_LLM_MAX_COST_USD: ${CRI_LLM_MAX_COST_USD:-5}
+      CRI_LLM_INPUT_COST_PER_MILLION: ${CRI_LLM_INPUT_COST_PER_MILLION:-0}
+      CRI_LLM_OUTPUT_COST_PER_MILLION: ${CRI_LLM_OUTPUT_COST_PER_MILLION:-0}
     depends_on:
       postgres: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
@@ -39,11 +55,17 @@ services:
     image: cri-dashboard:1.0.0
     build: ./dashboard
     ports: ["127.0.0.1:8080:8080"]
+    environment:
+      API_UPSTREAM: api:8000
     depends_on:
       api: {condition: service_healthy}
     read_only: true
     tmpfs:
       - /tmp:uid=101,gid=101,mode=0755
+      # nginx-unprivileged entrypoint renders API_UPSTREAM into this directory.
+      # Keep the container root filesystem read-only while allowing only this
+      # runtime configuration directory to be writable.
+      - /etc/nginx/conf.d:uid=101,gid=101,mode=0755
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: "no"
@@ -67,12 +89,16 @@ services:
       - >-
         psql -v ON_ERROR_STOP=1 -h postgres -U cri_owner -d cri -f /migrations/0001_initial.sql
         && psql -v ON_ERROR_STOP=1 -v app_password="$$CRI_APP_PASSWORD" -v database_name=cri -h postgres -U cri_owner -d cri -f /migrations/0002_runtime_role.sql
+        && psql -v ON_ERROR_STOP=1 -h postgres -U cri_owner -d cri -f /migrations/0003_runtime_state.sql
+        && psql -v ON_ERROR_STOP=1 -h postgres -U cri_owner -d cri -f /migrations/0004_audit_event_time.sql
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       CRI_APP_PASSWORD: ${CRI_APP_PASSWORD:?Set CRI_APP_PASSWORD}
     volumes:
       - ./backend/alembic/versions/0001_initial.sql:/migrations/0001_initial.sql:ro
       - ./backend/alembic/versions/0002_runtime_role.sql:/migrations/0002_runtime_role.sql:ro
+      - ./backend/alembic/versions/0003_runtime_state.sql:/migrations/0003_runtime_state.sql:ro
+      - ./backend/alembic/versions/0004_audit_event_time.sql:/migrations/0004_audit_event_time.sql:ro
     depends_on:
       postgres: {condition: service_healthy}
     restart: "no"

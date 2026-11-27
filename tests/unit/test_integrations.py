@@ -64,10 +64,14 @@ def test_external_audit_sink_requires_https_and_posts():
     with pytest.raises(ValueError): ExternalAuditSink("http://bad", "x" * 32)
 
 def test_developer_generates_reviewable_draft_without_execution():
-    draft = Developer().generate("write a small parser")
+    response = FakeResponse({"choices": [{"message": {"content": "def parse(value):\n    return str(value)\n"}}]})
+    developer = Developer("https://llm.example/v1", "k" * 32, "test-model", opener=lambda *a, **k: response)
+    draft = developer.generate("write a small parser")
     compile(draft.content, draft.filename, "exec")
     assert draft.status == "draft_only" and len(draft.sha256) == 64
-    with pytest.raises(ValueError): Developer().generate("hello", "../escape.py")
+    with pytest.raises(ValueError): developer.generate("hello", "../escape.py")
+    with pytest.raises(RuntimeError, match="not configured"):
+        Developer().generate("write code")
 
 def test_improvement_workflow_requires_evidence_and_human_approval(tmp_path):
     from cri.core import Audit
@@ -147,3 +151,108 @@ def test_opa_policy_wraps_local_role_check_and_external_decision(tmp_path):
     policy.check(identity, "propose")
     assert client.calls[0][1] == "propose"
     with pytest.raises(Denied): policy.check(identity, "memory_write")
+
+def test_redis_queue_and_agent_heartbeat_primitives():
+    class QueueRedis(FakeRedis):
+        def __init__(self): super().__init__(); self.queues = {}
+        def rpush(self, key, value): self.queues.setdefault(key, []).append(value)
+        def ltrim(self, key, start, end): self.queues[key] = self.queues.get(key, [])[start:]
+        def llen(self, key): return len(self.queues.get(key, []))
+        def blpop(self, key, timeout=0):
+            values = self.queues.get(key, [])
+            return (key, values.pop(0).encode()) if values else None
+    redis = QueueRedis(); store = RedisTTLStore(redis)
+    assert store.enqueue("jobs", {"id": "1"}) == 1
+    assert store.dequeue("jobs") == {"id": "1"}
+    store.heartbeat("dev-1", {"status": "working"}, 30)
+    assert store.agent_state("dev-1")["status"] == "working"
+    with pytest.raises(ValueError): store.dequeue("jobs", timeout=60)
+
+
+def test_repository_persists_improvements_agents_and_audit_status(tmp_path):
+    from cri.db.models import Base
+    engine = create_engine(f"sqlite:///{tmp_path / 'state.sqlite'}")
+    Base.metadata.create_all(engine)
+    repo = SQLRepository(sessionmaker(engine, expire_on_commit=False))
+    repo.save_improvement("c" * 32, "review proposal", "proposal", {"ok": True})
+    assert repo.list_improvements()[0].stage == "proposal"
+    repo.save_agent_state("developer-1", "developer", {"status": "idle"})
+    assert repo.get_agent_state("developer-1").state["status"] == "idle"
+    import hashlib
+    event_time = 123.5
+    body = {"event": "event", "actor": "actor", "details": {}, "prev": "0" * 64, "time": event_time}
+    digest = hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    repo.append_audit("event", "actor", {}, "0" * 64, digest, event_time)
+    # Idempotent replay returns the same row rather than inserting duplicates.
+    repo.append_audit("event", "actor", {}, "0" * 64, digest, event_time)
+    assert repo.audit_status()["count"] == 1
+    assert repo.audit_status()["valid"] is True
+    engine.dispose()
+
+
+def test_developer_rejects_bad_provider_response_and_insecure_endpoint():
+    from cri.agents.developer import DeveloperUnavailable
+    bad = FakeResponse({"choices": []})
+    developer = Developer("https://llm.example", "k" * 32, "m", opener=lambda *a, **k: bad)
+    with pytest.raises(DeveloperUnavailable): developer.generate("make module")
+    with pytest.raises(ValueError, match="HTTPS"):
+        Developer("http://llm.example", "k" * 32, "m").generate("make module")
+
+def test_improvement_workflow_restores_durable_stage(tmp_path):
+    from cri.core import Audit, Tokens
+    from cri.db.models import Base
+    engine = create_engine(f"sqlite:///{tmp_path / 'improvements.sqlite'}")
+    Base.metadata.create_all(engine)
+    repo = SQLRepository(sessionmaker(engine, expire_on_commit=False))
+    tokens = Tokens("s" * 32, nonce_db=tmp_path / "improve-state.sqlite")
+    flow = ImprovementWorkflow(Audit(tmp_path / "improve-audit.jsonl"), tokens, repo)
+    item = flow.create("review persistence")
+    flow.advance(item.id, {"proposal": "draft"})
+    restored = ImprovementWorkflow(Audit(tmp_path / "restore-audit.jsonl"), tokens, repo)
+    assert restored.items[item.id].stage == Stage.PROPOSAL
+    engine.dispose()
+
+def test_s3_object_lock_sink_uses_compliance_retention():
+    from cri.integrations.external_audit import S3ObjectLockAuditSink
+    class S3:
+        def __init__(self): self.kwargs=None
+        def put_object(self, **kwargs): self.kwargs=kwargs
+    client=S3(); sink=S3ObjectLockAuditSink(client,"audit-bucket",30)
+    digest=sink.append({"event":"test"})
+    assert client.kwargs["ObjectLockMode"]=="COMPLIANCE"
+    assert client.kwargs["Metadata"]["sha256"]==digest
+    assert client.kwargs["Key"].startswith("cri-audit/")
+
+def test_redis_store_from_url_uses_authenticated_client(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    calls={}
+    class Client:
+        def ping(self): calls["ping"]=True
+    class RedisFactory:
+        @staticmethod
+        def from_url(url, **kwargs): calls.update(url=url,kwargs=kwargs); return Client()
+    monkeypatch.setitem(sys.modules,"redis",SimpleNamespace(Redis=RedisFactory))
+    store=RedisTTLStore.from_url("rediss://user:pass@redis.test:6379/0")
+    assert isinstance(store,RedisTTLStore) and calls["ping"]
+    assert calls["url"].startswith("rediss://")
+
+def test_opa_client_from_env(monkeypatch):
+    monkeypatch.setenv("CRI_OPA_URL","http://opa:8181")
+    client=OPAClient.from_env()
+    assert client.endpoint=="http://opa:8181"
+
+def test_s3_object_lock_from_env(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    from cri.integrations.external_audit import S3ObjectLockAuditSink
+    calls={}
+    class Boto:
+        @staticmethod
+        def client(name,region_name=None): calls.update(name=name,region=region_name); return object()
+    monkeypatch.setitem(sys.modules,"boto3",Boto)
+    monkeypatch.setenv("CRI_AUDIT_S3_BUCKET","immutable-audit")
+    monkeypatch.setenv("CRI_AUDIT_S3_RETENTION_DAYS","90")
+    sink=S3ObjectLockAuditSink.from_env()
+    assert sink.bucket=="immutable-audit" and sink.retention_days==90
+    assert calls["name"]=="s3"

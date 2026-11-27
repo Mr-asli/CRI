@@ -1,28 +1,36 @@
-# Blockers and external verification requirements
+# CRI deployment blockers and verification gates
 
-| Area | Code included | Local verification | Remaining gate |
+| Area | Code in package | Local evidence | Required external verification / remaining work |
 |---|---|---|---|
-| PostgreSQL / SQLAlchemy | Models, repository, migrations, runtime role | SQLite unit tests only | Run pgvector migration and API integration job on GitHub Actions |
-| Redis | TTL adapter and startup ping | Mock unit tests only | Run Redis integration on GitHub Actions |
-| OPA | HTTP client, fail-closed wrapper, Rego policy | Mock unit tests only | Start OPA, evaluate Rego and API decisions in CI |
-| Audit immutability | Local hash chain, PostgreSQL append-only trigger, optional HTTPS forwarder | Hash-chain tests; remote sink mocked | Separate DB owner/runtime role, WORM collector and retention test |
-| Host watchdog | systemd unit + root-only stop/start scripts | subprocess mocked | Install/test on dedicated Linux host; verify API/agent cannot write state or call systemctl |
-| Docker sandbox | Docker CLI runner, digest pinning, no-network/read-only/caps/resource limits | Not executed; fail-closed | Dedicated remote sandbox worker/host; do not mount Docker socket into API |
-| Developer | Deterministic source draft template | Unit test compiles generated draft | Replace template with reviewed model/code-generation provider behind policy gateway |
-| Self-improvement | Stage machine + signed one-time approval | Unit test | Add durable workflow storage, discovery worker, security review implementation and signed-token issuance UI |
-| Dashboard | React source, Nginx proxy, Dockerfile | Not built locally | npm/Vitest/TypeScript/Docker build in CI and browser/device acceptance tests |
-| Full CI | Workflow jobs authored | YAML/shell syntax only | Push repository, configure secrets, run Actions and inspect artifacts |
+| PostgreSQL / migrations | SQLAlchemy models, migrations 0001–0003, privileged migration runner, restricted runtime role | Repository SQLite tests; migration runner compile check | Run migrations against a disposable PostgreSQL 16 + pgvector instance and confirm role grants/trigger behavior in GitHub Actions and Railway |
+| PostgreSQL Audit | Stable hash event ID, idempotent replay, DB chain-link status | SQLite repository idempotency test | Verify live Railway row count, replay after DB outage, and hash chain against actual PostgreSQL rows |
+| Redis | TTL, bounded queue, heartbeat/state primitives; startup ping | Mock tests only | Verify Redis TLS/auth, persistence policy, queue consumer, retries, and failover on GitHub Actions/Railway |
+| OPA | HTTP client, fail-closed wrapper, Rego policies | Mock tests; YAML parse | Run OPA 1.x policy evaluation and API authorization tests; validate all action names and policy input schemas |
+| Remote/WORM Audit | HTTPS forwarder plus S3 Object Lock COMPLIANCE writer | Mock HTTP and S3 client tests | Provision bucket Object Lock/versioning, restrictive IAM, retention and tamper/immutability checks; mock tests do not establish WORM |
+| Developer Agent / Universal LLM Gateway | OpenAI-compatible, Gemini and Anthropic adapters; normalized response; bounded retry/timeout; configured fallback; model metadata; process-local cost accounting; metadata-only audit | Mock adapter, fallback, retry, cost and draft validation tests; 88 full-suite tests, 85% coverage | Live provider compatibility, pricing, quota, timeout and fallback verification; durable shared cost cap and periodic health scheduler remain required for multi-replica production |
+| Self-improvement | Approval-gated stage machine and persistent SQL primitives | Unit tests for stage/token workflow | Durable orchestration, trusted sandbox/test/security attestations, rejection/rollback, approval UX, and recovery need end-to-end integration |
+| Docker Sandbox | Docker CLI runner with digest pinning, no network, read-only rootfs, dropped capabilities and quotas | Fail-closed unit tests only | Run on a dedicated isolated runner; never mount Docker socket into API/agent container; validate cleanup, seccomp and escape resistance |
+| Host watchdog / Kill Switch | Host-side script and systemd unit templates | Syntax and mocked tests | Install on an independent Linux host, verify root-owned state path and API/agent cannot signal or alter host unit; Railway app container cannot provide this guarantee |
+| Dashboard | React source, REST and one-time-ticket WebSocket client, Nginx proxy, Dockerfile | Source inspection; npm install timed out | GitHub Actions must pass `npm ci`, lint, Vitest, TypeScript build and Docker image build; browser/mobile acceptance |
+| Railway | Railway TOML and backend Dockerfile | Config/source inspection only | Configure API, Dashboard, Postgres, Redis and OPA as separate services; set persistent volume and secrets; test health, migrations and rollback |
+| CI | Unit, integration, E2E and Dashboard jobs | Python 77 passed; 85% coverage; YAML/shell syntax passed | Push branch and inspect actual GitHub Actions artifacts/logs; configure required CI secrets |
 
-## Required GitHub Actions secrets for full Compose E2E
+## Required secrets / variables
 
-- `CRI_ADMIN_TOKEN` — at least 32 random bytes.
-- `APPROVAL_SIGNING_KEY` — independent random secret, at least 32 bytes.
-- `CRI_POSTGRES_PASSWORD` — strong database owner password.
-- `CRI_APP_PASSWORD` — separate runtime database password.
-- `CRI_REDIS_PASSWORD` — strong Redis password.
+- `CRI_ADMIN_TOKEN`: independent random value, at least 32 bytes.
+- `CRI_APPROVAL_SECRET`: independent random signing secret, at least 32 bytes.
+- `CRI_MIGRATION_DATABASE_URL`: privileged schema-owner connection; only required during migration startup and removed before Uvicorn starts.
+- `CRI_DATABASE_URL`: restricted `cri_app` runtime connection.
+- `CRI_APP_PASSWORD`: independent runtime-role password used by migration runner.
+- `CRI_REDIS_URL`: authenticated Redis connection.
+- `CRI_OPA_URL`: OPA policy endpoint.
+- `CRI_AUDIT_REMOTE_URL` / `CRI_AUDIT_REMOTE_TOKEN`: HTTPS append-only receiver credentials.
+- `CRI_LLM_BASE_URL` / `CRI_LLM_API_KEY` / `CRI_LLM_MODEL`: OpenAI-compatible provider configuration.
+- `CRI_LLM_BASE_URL`, `CRI_LLM_API_KEY`, `CRI_LLM_MODEL`: required for the E2E task-creation flow.
+- `CRI_SANDBOX_IMAGE`: operator-approved image pinned by immutable SHA-256 digest.
 
-Never use the same secret for admin authentication, approval signing, PostgreSQL, and Redis.
+Do not put real secrets in the ZIP, Git history, screenshots, issue reports, or public repository files. Rotate any secret that has ever been committed to a public repository.
 
-## Explicit safety boundary
+## Non-negotiable deployment boundary
 
-The host watchdog is an external supervisor template, not a privilege boundary until installed by a host administrator. The API kill endpoint does not have host-level privileges. Do not mount `/var/run/docker.sock` into the API container. Untrusted code execution remains disabled unless a dedicated sandbox host/provider has been independently tested.
+The host watchdog is not independent until installed outside the application host/process boundary by an administrator. The API Kill Switch does not stop the Railway host. No Docker socket may be mounted into the API or agent container. Untrusted code execution and automatic promotion remain disabled until a separately operated sandbox and trusted evidence/approval chain have been verified.

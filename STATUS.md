@@ -1,40 +1,28 @@
-# CRI status — final implementation package v1.0
+# CRI implementation status — Universal LLM Gateway v1 candidate
 
-## Implemented in this package
+## Implemented in this package revision
 
-- SQLAlchemy 2.x models and repository boundaries for tasks, audit events, memory records, and optional pgvector embeddings.
-- PostgreSQL 16 + pgvector schema migrations (`0001_initial.sql`, `0002_runtime_role.sql`). The runtime role is separate from the migration/database owner; its audit table grants are INSERT/SELECT only and a database trigger rejects UPDATE/DELETE.
-- Redis TTL storage adapter and startup connectivity check when `CRI_REDIS_URL` is configured.
-- OPA HTTP decision client, fail-closed behavior, Rego authorization policy, and integration with API admin access and agent policy checks when `CRI_OPA_URL` is configured.
-- Optional HTTPS remote audit forwarder. The receiving service must provide independently enforced WORM/append-only retention.
-- Deterministic Developer draft generator; generated source is a reviewable template, not an unrestricted code-writing model.
-- Self-improvement state machine with security, sandbox, test, comparison, and one-time signed human approval gates.
-- Docker CLI sandbox runner remains fail-closed: requires an available Docker Engine and an operator-pinned immutable image digest; no Docker socket is mounted into the API container.
-- Host watchdog and systemd unit templates. The host-level stop request is created by a root operator outside the API/agent process. Host-level start is also root-operator-only.
-- Responsive React dashboard source, Nginx reverse proxy configuration, and production dashboard Dockerfile.
-- Docker Compose topology for API, dashboard, PostgreSQL/pgvector, Redis, OPA, and one-shot migrations.
-- GitHub Actions workflow for Python tests/coverage, infrastructure migration checks, OPA policy evaluation, compose E2E, and dashboard typecheck/test/build/container build.
+- Added `backend/cri/llm/` with OpenAI-compatible (including OpenRouter), Gemini and Anthropic HTTP adapters; normalized content, usage, model, provider and optional tool-call fields.
+- Added server-side gateway configuration, model registry, bounded exponential retry, per-request timeout, configured sequential fallback, observed health state, process-local token-cost accounting, and metadata-only audit events.
+- Routed the Developer code-proposal client through the gateway while preserving draft-only validation and no execution/promotion behavior. Existing constructor injection remains available for mocked OpenAI-compatible tests.
+- Added Redis URL factory, OPA environment factory, and an S3 Object Lock COMPLIANCE writer alongside the existing HTTPS audit receiver.
+- Added gateway adapter/fallback/cost/registry tests and S3 Object Lock mock test.
+- Added `docs/LLM_GATEWAY.md` and updated `.env.example`.
+- Dashboard source, Dockerfile, Vitest configuration, and CI dashboard build job are retained from the inspected source ZIP.
 
-**Required status statement:** «موارد باقی‌مانده در محیط محلی (Docker/DB) نوشته شده‌اند و آماده اجرا در GitHub Actions هستند.»
+## Verification performed in this environment
 
-This statement means the integration code and CI jobs are included. It does **not** mean those infrastructure jobs have already passed: this environment did not execute Docker Compose, PostgreSQL, Redis, OPA, or npm container builds.
-
-## Local verification performed
-
-- Python tests: 70 passed.
-- Backend statement coverage: 85% (measured locally with coverage.py; CI threshold: 85%).
 - Python compileall: passed.
-- YAML parse of both Compose files and CI workflow: passed.
-- Shell syntax checks for workflow run blocks: passed.
+- Full Python test suite: **91 passed**.
+- Python statement coverage: **85%**, meeting the repository CI threshold.
+- This environment did not run Docker Compose, Railway, live Redis, live OPA, S3 Object Lock, or live LLM-provider calls. Dashboard dependencies/build were not re-run in this revision.
 
-## Not certified / remaining deployment work
+## Important limitations — not certified production-ready
 
-- GitHub Actions has not been run from this environment; repository secrets and a real runner are required.
-- Dashboard npm install was attempted but could not complete in this environment; Vitest, TypeScript build, and Docker build therefore remain unverified.
-- Docker sandbox execution was not run. The API container intentionally has no Docker socket; a dedicated remote sandbox worker/host with a restricted, authenticated execution API is required before enabling untrusted-code execution.
-- Host watchdog/systemd units are templates and must be installed and tested on a dedicated Linux host. The current API Kill Switch is an application admission latch; it is not wired to the privileged host stop file. The root operator stop script is the independent host control path.
-- A remote audit collector is optional and must be configured with `CRI_AUDIT_REMOTE_URL` and `CRI_AUDIT_REMOTE_TOKEN`; its server-side WORM guarantees require separate verification.
-- Human approval is authenticated by a one-time HMAC token in the workflow; production signing-key custody/rotation should move to a dedicated KMS/HSM.
-- Full agent autonomy, model-provider integration, continuous self-improvement discovery, distributed queues, chaos tests, and gVisor/Firecracker isolation are not certified as production-ready.
-
-CRI must remain in supervised development mode until these deployment gates are verified.
+- Cost accounting is process-local and only meaningful when accurate provider token prices are configured. It is not a shared multi-replica billing cap and resets on restart. A durable shared limiter is required before horizontal scaling.
+- Health status is updated by actual request outcomes; no background periodic probe scheduler is started.
+- Fallback requires explicit fallback base URL and model. API compatibility and feature support differ by provider; all three adapters require live provider verification.
+- S3 Object Lock writer submits COMPLIANCE retention requests; bucket Object Lock/versioning, IAM restrictions, retention policy, and immutable-read verification must be provisioned and tested by an administrator. The HTTP receiver cannot prove WORM.
+- Redis primitives and OPA client are present, but worker-consumer topology and production policy coverage require deployment verification.
+- Host watchdog remains a separately installed host-side stop supervisor; Railway containers cannot provide independent host control.
+- No production certification, complete security assurance, or claim that all capabilities are 100% verified is made.

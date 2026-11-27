@@ -58,7 +58,8 @@ def test_unavailable_sandbox_prevents_approval_token(tmp_path):
     policy = Policy(audit)
     tokens = Tokens("y" * 32, nonce_db=tmp_path / "nonces.sqlite")
     flow = Workflow(
-        audit, policy, Kill(tmp_path / "KILL"), tokens, UnavailableSandbox()
+        audit, policy, Kill(tmp_path / "KILL"), tokens, UnavailableSandbox(),
+        type("FakeDeveloper", (), {"generate": lambda self, spec: type("Draft", (), {"content": "def run(): return 1", "filename": "proposal.py", "sha256": "a" * 64})()})()
     )
     proposal = flow.create("test fail closed")
     with pytest.raises(SandboxUnavailable):

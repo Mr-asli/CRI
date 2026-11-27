@@ -49,11 +49,16 @@ jobs:
           ./scripts/wait-for-healthy.sh postgres 120
           ./scripts/wait-for-healthy.sh redis 120
           ./scripts/wait-for-healthy.sh opa 120
-      - name: Apply PostgreSQL migration
-        run: docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test < backend/alembic/versions/0001_initial.sql
+      - name: Apply PostgreSQL schema migration
+        run: |
+          docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test < backend/alembic/versions/0001_initial.sql
       - name: Apply restricted runtime role migration
         run: |
           docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -v app_password=ci-only-app-password -v database_name=cri_test -U cri_test -d cri_test < backend/alembic/versions/0002_runtime_role.sql
+      - name: Apply durable runtime state and audit timestamp migrations
+        run: |
+          docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test < backend/alembic/versions/0003_runtime_state.sql
+          docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test < backend/alembic/versions/0004_audit_event_time.sql
       - name: Verify restricted runtime role privileges
         run: |
           docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test -c "SELECT 1 / ((has_database_privilege('cri_app', 'cri_test', 'CONNECT') AND has_table_privilege('cri_app', 'audit_events', 'SELECT') AND has_table_privilege('cri_app', 'audit_events', 'INSERT') AND NOT has_table_privilege('cri_app', 'audit_events', 'UPDATE') AND NOT has_table_privilege('cri_app', 'audit_events', 'DELETE') AND NOT has_table_privilege('cri_app', 'audit_events', 'TRUNCATE') AND has_sequence_privilege('cri_app', 'audit_events_sequence_seq', 'USAGE') AND has_table_privilege('cri_app', 'tasks', 'UPDATE'))::int);"
@@ -104,11 +109,40 @@ jobs:
       POSTGRES_PASSWORD: ${{ secrets.CRI_POSTGRES_PASSWORD }}
       CRI_APP_PASSWORD: ${{ secrets.CRI_APP_PASSWORD }}
       REDIS_PASSWORD: ${{ secrets.CRI_REDIS_PASSWORD }}
+      CRI_LLM_BASE_URL: ${{ secrets.CRI_LLM_BASE_URL }}
+      CRI_LLM_API_KEY: ${{ secrets.CRI_LLM_API_KEY }}
+      CRI_LLM_MODEL: ${{ secrets.CRI_LLM_MODEL }}
+      CRI_LLM_PROVIDER: ${{ vars.CRI_LLM_PROVIDER || 'openai-compatible' }}
+      CRI_LLM_FALLBACK_PROVIDER: ${{ vars.CRI_LLM_FALLBACK_PROVIDER }}
+      CRI_LLM_FALLBACK_BASE_URL: ${{ vars.CRI_LLM_FALLBACK_BASE_URL }}
+      CRI_LLM_FALLBACK_MODEL: ${{ vars.CRI_LLM_FALLBACK_MODEL }}
+      CRI_LLM_FALLBACK_API_KEY: ${{ secrets.CRI_LLM_FALLBACK_API_KEY }}
+      CRI_LLM_MAX_COST_USD: ${{ vars.CRI_LLM_MAX_COST_USD }}
+      CRI_LLM_INPUT_COST_PER_MILLION: ${{ vars.CRI_LLM_INPUT_COST_PER_MILLION }}
+      CRI_LLM_OUTPUT_COST_PER_MILLION: ${{ vars.CRI_LLM_OUTPUT_COST_PER_MILLION }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Validate required secrets
-        run: test -n "$CRI_ADMIN_TOKEN" && test -n "$CRI_APPROVAL_SECRET" && test -n "$POSTGRES_PASSWORD" && test -n "$CRI_APP_PASSWORD" && test -n "$REDIS_PASSWORD"
+      - name: Validate required secrets and LLM configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CRI_ADMIN_TOKEN"
+          test -n "$CRI_APPROVAL_SECRET"
+          test -n "$POSTGRES_PASSWORD"
+          test -n "$CRI_APP_PASSWORD"
+          test -n "$REDIS_PASSWORD"
+          if [[ -n "$CRI_LLM_BASE_URL$CRI_LLM_API_KEY$CRI_LLM_MODEL" ]]; then
+            test -n "$CRI_LLM_BASE_URL"
+            test -n "$CRI_LLM_API_KEY"
+            test -n "$CRI_LLM_MODEL"
+            case "$CRI_LLM_PROVIDER" in openrouter|openai-compatible|openai|gemini|anthropic) ;; *) echo "Unsupported CRI_LLM_PROVIDER"; exit 1 ;; esac
+          fi
+          if [[ -n "$CRI_LLM_FALLBACK_PROVIDER$CRI_LLM_FALLBACK_BASE_URL$CRI_LLM_FALLBACK_MODEL$CRI_LLM_FALLBACK_API_KEY" ]]; then
+            test -n "$CRI_LLM_FALLBACK_PROVIDER"
+            test -n "$CRI_LLM_FALLBACK_BASE_URL"
+            test -n "$CRI_LLM_FALLBACK_MODEL"
+          fi
       - name: Run full compose smoke E2E
         run: ./scripts/run-e2e-demo.sh
       - if: always()
@@ -126,7 +160,7 @@ jobs:
           node-version: '22'
       - name: Install dashboard dependencies
         working-directory: dashboard
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Type-check, test and build dashboard
         working-directory: dashboard
         run: npm run lint && npm test -- --run && npm run build

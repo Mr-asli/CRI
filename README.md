@@ -9,11 +9,12 @@ CRI is a governed multi-agent control-plane prototype. It is not certified for u
 - FastAPI control plane with bearer-authenticated administrative routes.
 - SQLAlchemy 2.x persistence models/repositories for tasks, audit events, and memory records; PostgreSQL 16 + pgvector migrations.
 - Separate database owner and runtime-role grants; the runtime role cannot update/delete audit rows.
-- Redis TTL adapter and configured-service startup checks.
+- Redis TTL, bounded queue, and agent-heartbeat primitives with configured-service startup checks.
 - OPA decision client and Rego policies; decisions fail closed when OPA denies or is unavailable.
-- Local hash-chained audit log, PostgreSQL append-only trigger, and optional HTTPS remote audit forwarder.
+- Local hash-chained audit log, idempotent PostgreSQL replay with recomputable event hashes, append-only trigger, and optional HTTPS audit receiver.
 - HMAC-signed expiring one-time approval tokens with SQLite replay protection.
-- Developer draft generator, approval-gated self-improvement state machine, and fail-closed Docker sandbox runner.
+- OpenAI-compatible HTTPS Developer code-generation client that produces syntax-checked, review-only drafts; it fails closed without provider configuration.
+- Approval-gated self-improvement state machine with durable repository primitives; promotion evidence still requires trusted external orchestration.
 - Host-side watchdog/systemd templates with root-only stop/start operator scripts.
 - React/TypeScript/Vite responsive dashboard, Nginx API reverse proxy, and dashboard Dockerfile.
 - Docker Compose topology for API, dashboard, PostgreSQL/pgvector, Redis, OPA, and database migrations.
@@ -21,13 +22,13 @@ CRI is a governed multi-agent control-plane prototype. It is not certified for u
 
 ## Local verification in this package build
 
-- 70 Python tests passed.
-- 86% backend statement coverage (CI floor: 85%).
+- 77 Python tests passed.
+- 85% backend statement coverage (CI floor: 85%).
 - Python compileall passed.
 - Both Compose files and the GitHub Actions workflow parsed as YAML.
 - Workflow shell blocks passed `bash -n`.
 
-Docker/Compose, live PostgreSQL, Redis, OPA, npm build, browser acceptance, and GitHub Actions were not executed in this environment. See `TEST_REPORT.md` and `BLOCKERS.md`.
+Docker/Compose, live PostgreSQL, Redis, OPA, npm build, browser acceptance, Railway deployment, and GitHub Actions were not executed in this environment. npm dependency installation timed out. See `TEST_REPORT.md` and `BLOCKERS.md`.
 
 ## Requirements
 
@@ -41,14 +42,15 @@ Docker/Compose, live PostgreSQL, Redis, OPA, npm build, browser acceptance, and 
 ```sh
 cp .env.example .env
 # Set independent strong values for CRI_ADMIN_TOKEN, CRI_APPROVAL_SECRET,
-# POSTGRES_PASSWORD, CRI_APP_PASSWORD, and REDIS_PASSWORD.
+# POSTGRES_PASSWORD, CRI_APP_PASSWORD, REDIS_PASSWORD, and LLM provider settings
+# if you intend to create code proposals.
 python -m pip install -e 'backend[test]'
 make test
 make coverage
 make audit
 ```
 
-Start the full stack with `docker compose up --build`. The dashboard is served at `http://127.0.0.1:8080`; the API is bound to `127.0.0.1:8000`. Compose applies PostgreSQL migrations before starting the API. Never expose these ports directly to an untrusted network.
+Start the full stack with `docker compose up --build`. The API migration runner in the Railway Docker image requires a privileged `CRI_MIGRATION_DATABASE_URL` and `CRI_APP_PASSWORD`; after migrations it removes the privileged URL from the Uvicorn process environment. For Railway-specific service configuration, read `docs/RAILWAY_DEPLOYMENT.md`. The dashboard is served at `http://127.0.0.1:8080`; the API is bound to `127.0.0.1:8000`. Compose applies PostgreSQL migrations before starting the API. Never expose these ports directly to an untrusted network.
 
 For the CI topology, run `docker compose -f docker-compose.test.yml up -d` and follow `.github/workflows/ci.yml`.
 

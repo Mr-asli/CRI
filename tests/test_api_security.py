@@ -1,3 +1,4 @@
+import pytest
 import importlib
 from fastapi.testclient import TestClient
 
@@ -11,7 +12,14 @@ def load_app(monkeypatch, tmp_path, admin="a" * 32, approval="b" * 32):
     monkeypatch.setenv("CRI_APPROVAL_SECRET", approval)
     import cri.main as main
 
-    return importlib.reload(main)
+    main = importlib.reload(main)
+    class TestDeveloper:
+        def generate(self, specification, filename="generated_module.py"):
+            import hashlib
+            content = "def run(context):\n    return {\"ok\": True}\n"
+            return type("Draft", (), {"content": content, "filename": filename, "sha256": hashlib.sha256(content.encode()).hexdigest()})()
+    main.FLOW.developer = TestDeveloper()
+    return main
 
 
 def test_sensitive_routes_require_bearer(monkeypatch, tmp_path):
@@ -190,3 +198,55 @@ def test_agent_payload_size_is_bounded(monkeypatch, tmp_path):
     with TestClient(main.app) as client:
         response = client.post("/api/agents/master/run", headers=headers, json={"goal": "x" * 12000})
         assert response.status_code == 422
+
+def test_websocket_requires_single_use_authenticated_ticket(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    headers = {"Authorization": "Bearer " + "a" * 32}
+    with TestClient(main.app) as client:
+        assert client.post("/api/ws-ticket").status_code == 401
+        ticket_response = client.post("/api/ws-ticket", headers=headers)
+        assert ticket_response.status_code == 200
+        ticket = ticket_response.json()["ticket"]
+        with client.websocket_connect("/api/ws?ticket=" + ticket) as websocket:
+            snapshot = websocket.receive_json()
+            assert snapshot["type"] == "snapshot"
+        # Ticket cannot be replayed.
+        with pytest.raises(Exception):
+            with client.websocket_connect("/api/ws?ticket=" + ticket):
+                pass
+
+def test_agent_state_is_written_to_postgres_and_redis(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    headers = {"Authorization": "Bearer " + "a" * 32}
+    class Repo:
+        def __init__(self): self.states = []
+        def save_agent_state(self, agent_id, role, state): self.states.append((agent_id, role, state))
+    class Redis:
+        def __init__(self): self.states = []
+        def heartbeat(self, agent_id, state, ttl): self.states.append((agent_id, state, ttl))
+    with TestClient(main.app) as client:
+        repo, redis = Repo(), Redis()
+        main.DB_REPOSITORY, main.REDIS_STORE = repo, redis
+        response = client.post("/api/agents/master/run", headers=headers, json={"goal": "test status persistence"})
+        assert response.status_code == 200
+        assert len(repo.states) == 2 and len(redis.states) == 2
+        assert repo.states[-1][2]["status"] == "completed"
+
+
+def test_memory_uses_redis_short_term_cache(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    headers = {"Authorization": "Bearer " + "a" * 32}
+    class MemoryRedis:
+        def __init__(self): self.values = {}
+        def setex(self, key, ttl, value): self.values[key] = value
+        def get(self, key): return self.values.get(key)
+        def delete(self, key): return int(self.values.pop(key, None) is not None)
+    from cri.integrations.redis_store import RedisTTLStore
+    with TestClient(main.app) as client:
+        main.REDIS_STORE = RedisTTLStore(MemoryRedis())
+        first = client.get("/api/memory", headers=headers)
+        assert first.status_code == 200 and first.json() == []
+        saved = client.post("/api/memory", headers=headers, json={"kind":"lesson", "text":"short term cache check"})
+        assert saved.status_code == 200
+        second = client.get("/api/memory", headers=headers)
+        assert second.json()[0]["text"] == "short term cache check"

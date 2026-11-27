@@ -1,7 +1,7 @@
 """SQLAlchemy persistence models for CRI. PostgreSQL is the production target."""
 from __future__ import annotations
 from datetime import datetime, timezone
-from sqlalchemy import DateTime, Integer, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Float, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 try:
@@ -30,6 +30,7 @@ class AuditRecord(Base):
     details: Mapped[dict] = mapped_column(JSON, nullable=False)
     previous_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     event_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    event_time: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 class MemoryRecord(Base):
@@ -46,3 +47,20 @@ if Vector is not None:
         __tablename__ = "memory_embeddings"
         memory_id: Mapped[str] = mapped_column(String(32), primary_key=True)
         embedding: Mapped[list] = mapped_column(Vector(1536), nullable=False)
+
+
+class ImprovementRecord(Base):
+    __tablename__ = "improvement_records"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    stage: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    evidence: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+class AgentStateRecord(Base):
+    __tablename__ = "agent_states"
+    agent_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    state: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
