@@ -24,7 +24,7 @@ jobs:
       - name: Compile all Python modules
         run: python -m compileall -q backend/cri scripts tests
       - name: Audit Python dependencies
-        run: python -m pip install pip-audit && pip-audit
+        run: python -m pip install pip-audit && pip-audit --skip-editable
       - name: Run unit, API, orchestration and security suites
         run: PYTHONPATH=backend coverage run --source=cri -m pytest -q
       - name: Enforce backend coverage floor
