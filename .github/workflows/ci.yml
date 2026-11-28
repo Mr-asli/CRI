@@ -29,7 +29,7 @@ jobs:
         run: PYTHONPATH=backend coverage run --source=cri -m pytest -q
       - name: Enforce backend coverage floor
         run: coverage report -m --fail-under=85
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-coverage
@@ -99,7 +99,7 @@ jobs:
         run: |
           docker compose --profile test logs --no-color > integration-logs.txt || true
           docker compose --profile test down --volumes --remove-orphans
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: infrastructure-integration-logs
@@ -151,7 +151,7 @@ jobs:
       - name: Run full compose smoke E2E
         run: ./scripts/run-e2e-demo.sh
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-logs
           path: artifacts/
