@@ -52,3 +52,6 @@ export async function connectLive(onMessage: (value: unknown) => void, onState?:
   };
   return socket;
 }
+
+export type MonitoringState = { host: {cpu_percent:number|null;memory_percent:number|null;disk_percent:number}; dependencies: Record<string,boolean>; agents: Record<string,unknown>; alerts: string[] };
+export const getMonitoring = () => request<MonitoringState>('/api/monitoring');

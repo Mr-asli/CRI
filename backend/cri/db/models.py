@@ -1,7 +1,7 @@
 """SQLAlchemy persistence models for CRI. PostgreSQL is the production target."""
 from __future__ import annotations
-from datetime import datetime, timezone
-from sqlalchemy import DateTime, Float, Integer, JSON, String, Text, UniqueConstraint, func
+from datetime import date, datetime, timezone
+from sqlalchemy import Date, DateTime, Float, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 try:
@@ -64,3 +64,28 @@ class AgentStateRecord(Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     state: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+class PlanRecord(Base):
+    __tablename__ = "plans"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    quotas: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+class UserAccountRecord(Base):
+    __tablename__ = "quota_users"
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    plan_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    active: Mapped[bool] = mapped_column(default=True, nullable=False)
+
+class UsageRecord(Base):
+    __tablename__ = "usage"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    feature: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    usage_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+
+class FeatureFlagRecord(Base):
+    __tablename__ = "feature_flags"
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(nullable=False, default=True)

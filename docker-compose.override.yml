@@ -1,0 +1,45 @@
+# Isolated ephemeral infrastructure for integration tests.
+# Run only these services with: docker compose --profile test up -d test-postgres test-redis test-opa
+# Production services are intentionally not overridden by this file.
+services:
+  test-postgres:
+    image: pgvector/pgvector:pg16
+    profiles: [test]
+    environment:
+      POSTGRES_DB: cri_test
+      POSTGRES_USER: cri_test
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cri_test -d cri_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    tmpfs: [/var/lib/postgresql/data]
+    networks: [cri-test]
+  test-redis:
+    image: redis:7-alpine
+    profiles: [test]
+    command: ["sh", "-c", "redis-server --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    tmpfs: [/data]
+    networks: [cri-test]
+  test-opa:
+    image: openpolicyagent/opa:1.4.2
+    profiles: [test]
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies"]
+    volumes: ["./infra/policies:/policies:ro"]
+    healthcheck:
+      test: ["CMD", "/opa", "eval", "true"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [cri-test]
+networks:
+  cri-test:
+    internal: true
