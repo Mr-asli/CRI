@@ -23,6 +23,8 @@ jobs:
         run: python -m pip install -e 'backend[test]'
       - name: Compile all Python modules
         run: python -m compileall -q backend/cri scripts tests
+      - name: Audit Python dependencies
+        run: python -m pip install pip-audit && pip-audit
       - name: Run unit, API, orchestration and security suites
         run: PYTHONPATH=backend coverage run --source=cri -m pytest -q
       - name: Enforce backend coverage floor
@@ -43,33 +45,33 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - name: Start PostgreSQL/pgvector, Redis and OPA
-        run: docker compose -f docker-compose.test.yml up -d
+        run: docker compose --profile test up -d test-postgres test-redis test-opa
       - name: Wait for infrastructure health
         run: |
-          ./scripts/wait-for-healthy.sh postgres 120
-          ./scripts/wait-for-healthy.sh redis 120
-          ./scripts/wait-for-healthy.sh opa 120
+          ./scripts/wait-for-healthy.sh test-postgres 120
+          ./scripts/wait-for-healthy.sh test-redis 120
+          ./scripts/wait-for-healthy.sh test-opa 120
       - name: Apply PostgreSQL schema migration
         run: |
-          docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test < backend/alembic/versions/0001_initial.sql
+          docker compose --profile test exec -T test-postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test < backend/alembic/versions/0001_initial.sql
       - name: Apply restricted runtime role migration
         run: |
-          docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -v app_password=ci-only-app-password -v database_name=cri_test -U cri_test -d cri_test < backend/alembic/versions/0002_runtime_role.sql
+          docker compose --profile test exec -T test-postgres psql -v ON_ERROR_STOP=1 -v app_password=ci-only-app-password -v database_name=cri_test -U cri_test -d cri_test < backend/alembic/versions/0002_runtime_role.sql
       - name: Apply durable runtime state and audit timestamp migrations
         run: |
-          docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test < backend/alembic/versions/0003_runtime_state.sql
-          docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test < backend/alembic/versions/0004_audit_event_time.sql
+          docker compose --profile test exec -T test-postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test < backend/alembic/versions/0003_runtime_state.sql
+          docker compose --profile test exec -T test-postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test < backend/alembic/versions/0004_audit_event_time.sql
       - name: Verify restricted runtime role privileges
         run: |
-          docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test -c "SELECT 1 / ((has_database_privilege('cri_app', 'cri_test', 'CONNECT') AND has_table_privilege('cri_app', 'audit_events', 'SELECT') AND has_table_privilege('cri_app', 'audit_events', 'INSERT') AND NOT has_table_privilege('cri_app', 'audit_events', 'UPDATE') AND NOT has_table_privilege('cri_app', 'audit_events', 'DELETE') AND NOT has_table_privilege('cri_app', 'audit_events', 'TRUNCATE') AND has_sequence_privilege('cri_app', 'audit_events_sequence_seq', 'USAGE') AND has_table_privilege('cri_app', 'tasks', 'UPDATE'))::int);"
+          docker compose --profile test exec -T test-postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test -c "SELECT 1 / ((has_database_privilege('cri_app', 'cri_test', 'CONNECT') AND has_table_privilege('cri_app', 'audit_events', 'SELECT') AND has_table_privilege('cri_app', 'audit_events', 'INSERT') AND NOT has_table_privilege('cri_app', 'audit_events', 'UPDATE') AND NOT has_table_privilege('cri_app', 'audit_events', 'DELETE') AND NOT has_table_privilege('cri_app', 'audit_events', 'TRUNCATE') AND has_sequence_privilege('cri_app', 'audit_events_sequence_seq', 'USAGE') AND has_table_privilege('cri_app', 'tasks', 'UPDATE'))::int);"
       - name: Verify runtime role can authenticate
         run: |
-          docker compose -f docker-compose.test.yml exec -T -e PGPASSWORD=ci-only-app-password postgres psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U cri_app -d cri_test -c "SELECT current_user, current_database();"
+          docker compose --profile test exec -T -e PGPASSWORD=ci-only-app-password test-postgres psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U cri_app -d cri_test -c "SELECT current_user, current_database();"
       - name: Verify audit log is append-only for runtime role
         shell: bash
         run: |
           export PGPASSWORD=ci-only-app-password
-          DB=(docker compose -f docker-compose.test.yml exec -T -e PGPASSWORD="$PGPASSWORD" postgres psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U cri_app -d cri_test)
+          DB=(docker compose --profile test exec -T -e PGPASSWORD="$PGPASSWORD" test-postgres psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U cri_app -d cri_test)
           "${DB[@]}" -c "INSERT INTO audit_events (event_id,event,actor,details,previous_hash,event_hash) VALUES ('ci-audit-test','ci.test','ci','{}','$(printf '0%.0s' {1..64})','$(printf '1%.0s' {1..64})');"
           if "${DB[@]}" -c "UPDATE audit_events SET event='tampered' WHERE event_id='ci-audit-test';"; then
             echo "ERROR: runtime role unexpectedly updated an audit record"
@@ -85,15 +87,15 @@ jobs:
           fi
           echo "Audit append-only checks passed."
       - name: Verify PostgreSQL schema and pgvector extension
-        run: docker compose -f docker-compose.test.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test -c "SELECT to_regclass('public.tasks'), extname FROM pg_extension WHERE extname='vector';"
+        run: docker compose --profile test exec -T test-postgres psql -v ON_ERROR_STOP=1 -U cri_test -d cri_test -c "SELECT to_regclass('public.tasks'), extname FROM pg_extension WHERE extname='vector';"
       - name: Evaluate OPA human policy
         shell: bash
         run: |
-          printf '%s' '{"subject":{"type":"human","authenticated":true},"action":"api.access","resource":{}}' | docker compose -f docker-compose.test.yml exec -T opa opa eval --format raw --data /policies --stdin-input 'data.cri.authz.allow' | grep -qx 'true'
+          printf '%s' '{"subject":{"type":"human","authenticated":true},"action":"api.access","resource":{}}' | docker compose --profile test exec -T test-opa opa eval --format raw --data /policies --stdin-input 'data.cri.authz.allow' | grep -qx 'true'
       - if: always()
         run: |
-          docker compose -f docker-compose.test.yml logs --no-color > integration-logs.txt || true
-          docker compose -f docker-compose.test.yml down --volumes --remove-orphans
+          docker compose --profile test logs --no-color > integration-logs.txt || true
+          docker compose --profile test down --volumes --remove-orphans
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -161,6 +163,9 @@ jobs:
       - name: Install dashboard dependencies
         working-directory: dashboard
         run: npm ci --no-audit --no-fund
+      - name: Audit npm dependencies
+        working-directory: dashboard
+        run: npm audit --audit-level=high
       - name: Type-check, test and build dashboard
         working-directory: dashboard
         run: npm run lint && npm test -- --run && npm run build

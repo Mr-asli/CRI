@@ -1,37 +1,43 @@
-# CRI final code audit — v1.0 package
+# CRI Security and Integration Audit
 
 ## Scope
 
-Reviewed backend API/core/agents/orchestration/tools, database adapters/models/migrations, OPA policy client and Rego, Redis adapter, audit forwarder, Docker sandbox, host watchdog/systemd templates, Compose files, CI workflow, dashboard Docker packaging, and test suite.
+Source-level review of the supplied `CRI-main (2).zip` package and changes made in this working copy. This report does not claim access to Git history, a production server, a Docker host, cloud credentials, or provider accounts.
 
-## Corrections and additions
+## Core invariant
 
-1. Added SQLAlchemy models and repository layer for tasks, audit events, memory records, and pgvector embeddings.
-2. Added PostgreSQL migrations, append-only audit trigger, and separate runtime role grants. The runtime DB role does not receive audit UPDATE/DELETE/TRUNCATE privileges.
-3. Connected configured PostgreSQL, Redis, and OPA services to application startup; configured dependency failures fail startup closed. Task and memory operations use the repository when PostgreSQL is configured.
-4. Connected OPA decisions to human API access and agent policy checks; OPA outages deny access.
-5. Added optional HTTPS remote audit forwarding, idempotent PostgreSQL replay, persisted event timestamps, and database-side recomputation of event hashes.
-6. Replaced the deterministic Developer template with an OpenAI-compatible HTTPS code-generation client that validates source and remains draft-only.
-7. Added a self-improvement stage machine with evidence gates and one-time signed token validation for promotion.
-8. Added host-side systemd watchdog and root-only stop/start operator scripts.
-9. Added dashboard Dockerfile and Nginx `/api` reverse proxy; added dashboard service to Compose.
-10. Reworked CI to run unit/coverage, PostgreSQL migration/pgvector checks, OPA policy evaluation, Compose E2E, and dashboard checks.
+**Capabilities may increase; authority and permissions may not.** Security controls must remain outside agent/model discretion. No agent may raise its own permissions, disable oversight/audit/stop controls, grant elevated authority to children, change infrastructure ownership, bypass network/resource policy, or publish without valid human approval.
 
-## Verification
+## Changes made in this revision
 
-- 98 local Python tests passed (Python 3.13.5 review run).
-- 86% backend statement coverage in the same run (CI threshold: 85%).
-- Python compilation and YAML/shell syntax checks passed.
+- Archived historical reports, Railway configuration, old Compose test file, systemd unit templates, and `build_cri.sh` under `docs/archive/`; source contents are retained.
+- Added `docker-compose.override.yml` with isolated ephemeral PostgreSQL/pgvector, Redis, and OPA test services under the `test` profile. Updated CI to use this topology.
+- Added `install.sh`, `healthcheck.sh`, local-plus-PostgreSQL backup/restore scripts, Caddy example, and deployment/quickstart/runbook documentation.
+- Changed dashboard base palette to the requested dark navy surfaces and accent; set document language/direction to Persian RTL.
+- Added LLM opt-out default in deployment config; Developer refuses generation when `LLM_ENABLED=false`.
+- Added `/v1/...` REST aliases while preserving `/api/...` routes and authentication behavior.
+- Added Dependabot configuration and pip-audit/npm-audit CI steps.
+- Added Definition of Done and prioritized blockers register; consolidated security test report into `TEST_REPORT.md`.
 
-## Findings / limitations
+## Verified locally
 
-- No actual Docker, PostgreSQL, Redis, OPA server, npm build, or GitHub Actions execution was available here. The integration jobs are authored but unverified in a real runner.
-- Docker sandbox code is present and fail-closed but the API container has no Docker daemon socket by design. A dedicated remote sandbox worker with authenticated, narrowly scoped execution API is still required.
-- The host watchdog requires root installation on the target host. It is deliberately not callable by agents or the API. The API `/api/kill` endpoint only sets the application latch; the root host stop script is a separate host-level control path and is not yet connected to the dashboard button.
-- The optional remote audit receiver must enforce WORM/append-only retention independently. A hash chain alone is tamper-evident, not immutable against a privileged host administrator.
-- The self-improvement state machine now has persistence primitives, but it is not a fully autonomous discovery/model-driven improvement service; evidence must come from trusted services, not client-supplied flags.
-- Dashboard source includes authenticated one-time-ticket WebSocket support and configurable API upstream. npm install timed out; visual/browser and npm tests await CI.
+- Python compileall: passed.
+- Python test suite after changes: 99 tests passed (see `TEST_REPORT.md`).
+- Compose and GitHub Actions YAML syntax parse: passed with PyYAML.
+- Shell syntax: passed for install, healthcheck, operational scripts, and archived build helper.
+
+## Not verified / not production-certified
+
+- Docker Compose startup, PostgreSQL 16 migrations, Redis, OPA runtime, and full service E2E: Docker Engine was not available in this execution environment.
+- Dashboard npm install/lint/test/build and npm audit: not yet run in a browser-capable CI environment.
+- Quota tables/middleware and user/plan identity model: not implemented; tracked as P0 in `BLOCKERS.md`.
+- Independent sandbox worker, host-level watchdog installation/Overnight Lockdown, external WORM/S3 Object Lock configuration, worker queue recovery, trusted self-improvement attestations, monitoring exporters/alerts, and actual HTTPS certificate issuance: not verified or complete.
+- API `/v1` aliases are source-level and unit-test verified; a formal OpenAPI compatibility review is still required.
+
+## Archive / Git limitation
+
+The supplied ZIP does not include `.git`. Therefore actual `git mv` operations and commit-history preservation were impossible. Files were moved into `docs/archive/` without deleting their contents. Re-run `git add -A` and review rename detection in the real repository before merging.
 
 ## Release decision
 
-**Implementation package ready for GitHub Actions validation; not certified production-ready.** Do not enable unattended agent execution until sandbox isolation, host supervisor installation, external audit retention, secrets management, and full CI are verified.
+**Not approved for production autonomous execution.** The package contains useful deployment scaffolding, but all P0 blockers in `BLOCKERS.md` must be closed with external evidence before public deployment or autonomous code execution.

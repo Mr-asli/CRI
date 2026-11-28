@@ -56,3 +56,19 @@ class RedisTTLStore:
         self.put("agents:" + agent_id, state, ttl_seconds)
     def agent_state(self, agent_id: str):
         return self.get("agents:" + agent_id)
+
+    def heartbeat_status(self):
+        """Return live agent heartbeat keys without exposing heartbeat payloads."""
+        try:
+            keys = list(self.client.scan_iter(match=self._key('agents:*'), count=100))
+            return {"available": True, "count": len(keys)}
+        except Exception:
+            return {"available": False, "count": 0}
+
+    def queue_depth(self):
+        """Count pending entries across CRI queues for the Prometheus gauge."""
+        try:
+            keys = list(self.client.scan_iter(match=self._key('queue:*'), count=100))
+            return sum(int(self.client.llen(key)) for key in keys)
+        except Exception:
+            return None

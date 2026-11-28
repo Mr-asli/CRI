@@ -1,0 +1,17 @@
+[Unit]
+Description=CRI agent and API workload (host-supervised)
+Requires=cri-watchdog.service
+After=cri-watchdog.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/cri
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down --remove-orphans
+TimeoutStartSec=120
+TimeoutStopSec=45
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

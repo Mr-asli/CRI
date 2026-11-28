@@ -19,7 +19,7 @@ def main():
         url = url.replace("postgres://", "postgresql://", 1)
     with psycopg.connect(url) as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS cri_schema_migrations (version varchar(32) PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())")
-        for version in ("0001_initial", "0002_runtime_role", "0003_runtime_state", "0004_audit_event_time"):
+        for version in ("0001_initial", "0002_runtime_role", "0003_runtime_state", "0004_audit_event_time", "0005_quota"):
             if conn.execute("SELECT 1 FROM cri_schema_migrations WHERE version=%s", (version,)).fetchone():
                 continue
             if version == "0001_initial":

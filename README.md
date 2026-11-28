@@ -22,13 +22,9 @@ CRI is a governed multi-agent control-plane prototype. It is not certified for u
 
 ## Local verification in this package build
 
-- 98 Python tests passed in the review environment (Python 3.13.5).
-- 86% backend statement coverage in the same run (CI floor: 85%).
-- Python compileall passed.
-- Both Compose files and the GitHub Actions workflow parsed as YAML.
-- Workflow shell blocks passed `bash -n`.
-
-Docker/Compose, live PostgreSQL, Redis, OPA, npm build, browser acceptance, Railway deployment, and GitHub Actions were not executed as part of this local review. See `TEST_REPORT.md` and `BLOCKERS.md`.
+- 112 Python tests passed; backend statement coverage: 85% (see `TEST_REPORT.md`).
+- Python compilation, shell syntax, and YAML parsing passed after the quota/monitoring/backup/configuration changes.
+- Docker/Compose, live PostgreSQL, Redis, OPA, npm/dashboard build, real alert delivery, and a live database restore were intentionally not executed; these remain server-side acceptance checks.
 
 ## Requirements
 
@@ -38,6 +34,8 @@ Docker/Compose, live PostgreSQL, Redis, OPA, npm build, browser acceptance, Rail
 - Supported Linux host for host-watchdog deployment
 
 ## Setup
+
+See `docs/QUICKSTART.md`, `docs/DEPLOY.md`, and `docs/RUNBOOK.md` for the supported operator workflow.
 
 ```sh
 cp .env.example .env
@@ -52,7 +50,7 @@ make audit
 
 Start the full stack with `docker compose up --build`. The API migration runner in the Railway Docker image requires a privileged `CRI_MIGRATION_DATABASE_URL` and `CRI_APP_PASSWORD`; after migrations it removes the privileged URL from the Uvicorn process environment. For Railway-specific service configuration, read `docs/RAILWAY_DEPLOYMENT.md`. The dashboard is served at `http://127.0.0.1:8080`; the API is bound to `127.0.0.1:8000`. Compose applies PostgreSQL migrations before starting the API. Never expose these ports directly to an untrusted network.
 
-For the CI topology, run `docker compose -f docker-compose.test.yml up -d` and follow `.github/workflows/ci.yml`.
+For isolated integration infrastructure, run `docker compose --profile test up -d test-postgres test-redis test-opa`; see `.github/workflows/ci.yml`.
 
 ## Security boundaries
 
@@ -61,4 +59,12 @@ For the CI topology, run `docker compose -f docker-compose.test.yml up -d` and f
 - Local hash chains detect modification but do not resist root. Use a separate database owner/runtime identity and an independently administered WORM audit collector.
 - Model-driven autonomous code generation, distributed queues, gVisor/Firecracker isolation, full chaos testing, KMS/HSM signing, and end-to-end unattended self-improvement are not production-certified.
 
-Read `STATUS.md`, `AUDIT_REPORT.md`, `TEST_REPORT.md`, `BLOCKERS.md`, `docs/INTEGRATIONS.md`, and `docs/HOST_WATCHDOG.md` before deployment.
+Read `STATUS.md`, `AUDIT_REPORT.md`, `TEST_REPORT.md`, `BLOCKERS.md`, `docs/INTEGRATIONS.md`, and `docs/archive/HOST_WATCHDOG.md` before deployment.
+
+## Quota, monitoring, and configuration
+
+Data-driven quota enforcement is provided by `plans`, `quota_users`, `usage`, and `feature_flags` (migration `0005_quota.sql`). It applies only to task creation, agent runs, and memory writes. `QUOTA_ENABLED=false` disables quota checks; `OWNER_BYPASS_QUOTA=true` exempts only the server-configured `CRI_OWNER_USER_ID`, never a client-supplied flag. Plan limits live in the `plans.quotas` JSON document; a JSON null feature limit is unlimited. Decisions are audited. See `docs/RUNBOOK.md` for operator SQL and safe quota changes.
+
+The API exposes `/healthz`, Prometheus metrics at `/metrics` and `/api/metrics`, and authenticated `/api/monitoring` host/dependency snapshots. Telegram and SMTP alert channels are optional and configured only through `.env`; delivery is best-effort and must be tested by the operator. Backup archives have SHA-256 sidecars, immediate integrity checks, configurable retention, and a documented disposable-environment restore drill. See `docs/RUNBOOK.md`.
+
+Startup validates the required admin and approval secrets (minimum 32 bytes) and boolean/threshold configuration, failing closed on invalid values. `.env.example` is the canonical development/production variable template; use separate secret values per environment. The production Compose migration now includes `0005_quota.sql`.

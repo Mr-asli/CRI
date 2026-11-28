@@ -23,6 +23,22 @@ services:
       CRI_OPA_URL: http://opa:8181
       CRI_AUDIT_REMOTE_URL: ${CRI_AUDIT_REMOTE_URL:-}
       CRI_AUDIT_REMOTE_TOKEN: ${CRI_AUDIT_REMOTE_TOKEN:-}
+      QUOTA_ENABLED: ${QUOTA_ENABLED:-true}
+      OWNER_BYPASS_QUOTA: ${OWNER_BYPASS_QUOTA:-true}
+      CRI_OWNER_USER_ID: ${CRI_OWNER_USER_ID:-human-admin}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      ALERT_CPU_PERCENT: ${ALERT_CPU_PERCENT:-90}
+      ALERT_MEMORY_PERCENT: ${ALERT_MEMORY_PERCENT:-90}
+      ALERT_DISK_PERCENT: ${ALERT_DISK_PERCENT:-90}
+      LLM_ENABLED: ${LLM_ENABLED:-false}
       CRI_LLM_PROVIDER: ${CRI_LLM_PROVIDER:-openai-compatible}
       CRI_LLM_BASE_URL: ${CRI_LLM_BASE_URL:-}
       CRI_LLM_API_KEY: ${CRI_LLM_API_KEY:-}
@@ -91,6 +107,7 @@ services:
         && psql -v ON_ERROR_STOP=1 -v app_password="$$CRI_APP_PASSWORD" -v database_name=cri -h postgres -U cri_owner -d cri -f /migrations/0002_runtime_role.sql
         && psql -v ON_ERROR_STOP=1 -h postgres -U cri_owner -d cri -f /migrations/0003_runtime_state.sql
         && psql -v ON_ERROR_STOP=1 -h postgres -U cri_owner -d cri -f /migrations/0004_audit_event_time.sql
+        && psql -v ON_ERROR_STOP=1 -h postgres -U cri_owner -d cri -f /migrations/0005_quota.sql
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       CRI_APP_PASSWORD: ${CRI_APP_PASSWORD:?Set CRI_APP_PASSWORD}
@@ -99,6 +116,7 @@ services:
       - ./backend/alembic/versions/0002_runtime_role.sql:/migrations/0002_runtime_role.sql:ro
       - ./backend/alembic/versions/0003_runtime_state.sql:/migrations/0003_runtime_state.sql:ro
       - ./backend/alembic/versions/0004_audit_event_time.sql:/migrations/0004_audit_event_time.sql:ro
+      - ./backend/alembic/versions/0005_quota.sql:/migrations/0005_quota.sql:ro
     depends_on:
       postgres: {condition: service_healthy}
     restart: "no"

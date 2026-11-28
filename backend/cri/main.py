@@ -6,7 +6,13 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from .config import validate_environment, env_bool
+from .monitoring import Metrics, host_metrics
+from .alerts import notify
+from .quota import QuotaService
 from pydantic import BaseModel, Field
 
 from .self_improvement import ImprovementWorkflow
@@ -66,13 +72,14 @@ AGENT_FACTORY = AgentFactory(POLICY, GATEWAY)
 DB_REPOSITORY = None
 REDIS_STORE = None
 WS_TICKETS = {}
+METRICS = Metrics()
+QUOTA = None
 
 
 @asynccontextmanager
 async def lifespan(app):
-    global DB_REPOSITORY, REDIS_STORE
-    if len(ADMIN_TOKEN.encode()) < 32:
-        raise RuntimeError("CRI_ADMIN_TOKEN must be set to at least 32 bytes")
+    global DB_REPOSITORY, REDIS_STORE, QUOTA
+    validate_environment({**os.environ, "CRI_ADMIN_TOKEN": ADMIN_TOKEN, "CRI_APPROVAL_SECRET": APPROVAL_SECRET})
     if TOKENS is None:
         raise RuntimeError("CRI_APPROVAL_SECRET must be set to at least 32 bytes")
 
@@ -91,12 +98,17 @@ async def lifespan(app):
                       AND to_regclass('public.memory_records') IS NOT NULL
                       AND to_regclass('public.improvement_records') IS NOT NULL
                       AND to_regclass('public.agent_states') IS NOT NULL
+                      AND to_regclass('public.plans') IS NOT NULL
+                      AND to_regclass('public.usage') IS NOT NULL
+                      AND to_regclass('public.feature_flags') IS NOT NULL
+                      AND to_regclass('public.quota_users') IS NOT NULL
                       AND EXISTS (SELECT 1 FROM information_schema.columns
                                   WHERE table_schema='public' AND table_name='audit_events' AND column_name='event_time')
                 """).scalar()
                 if not required:
                     raise RuntimeError("database schema is not current; run the CRI migration runner before startup")
         DB_REPOSITORY = SQLRepository(session_factory(engine))
+        QUOTA = QuotaService(session_factory(engine), AUDIT, env_bool("QUOTA_ENABLED", True), env_bool("OWNER_BYPASS_QUOTA", True))
         AUDIT.db_writer = lambda row: DB_REPOSITORY.append_audit(
             row["event"], row["actor"], row["details"], row["prev"], row["hash"], row["time"]
         )
@@ -139,6 +151,34 @@ async def lifespan(app):
 
 
 app = FastAPI(title="CRI Control Plane", version="1.0.0", lifespan=lifespan)
+
+class OperationalMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        started = time.perf_counter()
+        quota_features = {("POST", "/api/tasks"): "task_create", ("POST", "/v1/tasks"): "task_create",
+                          ("POST", "/api/agents/DeveloperAgent/run"): "agent_run",
+                          ("POST", "/api/memory"): "memory_write", ("POST", "/v1/memory"): "memory_write"}
+        feature = quota_features.get((request.method, request.url.path))
+        if request.method == "POST" and request.url.path.startswith(("/api/agents/", "/v1/agents/")) and request.url.path.endswith("/run"):
+            feature = "agent_run"
+        principal = "human-admin"
+        authenticated = hmac.compare_digest((request.headers.get("authorization", "").partition(" ")[2]), ADMIN_TOKEN) if ADMIN_TOKEN else False
+        if feature and env_bool("QUOTA_ENABLED", True) and authenticated:
+            if QUOTA is None:
+                if os.getenv("CRI_DATABASE_URL") or os.getenv("DATABASE_URL"):
+                    return JSONResponse(status_code=503, content={"detail":"quota database unavailable; request denied"})
+            else:
+                decision = QUOTA.check(principal, feature, is_owner=(principal == os.getenv("CRI_OWNER_USER_ID", "human-admin")))
+                if not decision.allowed:
+                    return JSONResponse(status_code=429, content={"detail":"quota exceeded", "reason":decision.reason, "used":decision.used, "limit":decision.limit})
+        response = await call_next(request)
+        elapsed = time.perf_counter()-started
+        METRICS.observe(request.method, request.url.path, response.status_code, elapsed)
+        if feature and authenticated and response.status_code < 400 and QUOTA is not None and not (env_bool("OWNER_BYPASS_QUOTA", True) and principal == os.getenv("CRI_OWNER_USER_ID", "human-admin")):
+            QUOTA.record(principal, feature)
+        return response
+
+app.add_middleware(OperationalMiddleware)
 
 
 class Goal(BaseModel):
@@ -196,6 +236,8 @@ def status_view():
         "opa": "configured" if OPA is not None else "not_configured",
         "remote_audit": "configured_receiver_not_verified" if AUDIT.remote_sink is not None else "not_configured",
         "host_watchdog": "deployment_required",
+        "host": host_metrics(),
+        "agent_heartbeats": REDIS_STORE.heartbeat_status() if REDIS_STORE is not None and hasattr(REDIS_STORE, "heartbeat_status") else {"available": False},
     }
 
 
@@ -439,6 +481,54 @@ def write_memory(x: MemoryInput, _admin=Depends(require_admin)):
         raise HTTPException(400, str(exc)) from exc
 
 
+@app.get("/healthz")
+def healthz():
+    return {"status":"ok", "control_plane":"reachable", "audit_valid":AUDIT.verify().get("valid", False)}
+
+@app.get("/metrics", response_class=PlainTextResponse)
+@app.get("/api/metrics", response_class=PlainTextResponse)
+def prometheus_metrics():
+    return METRICS.render()
+
+@app.get("/api/monitoring")
+def monitoring(_admin=Depends(require_admin)):
+    state = status_view()
+    if REDIS_STORE is not None:
+        depth = REDIS_STORE.queue_depth()
+        if depth is not None: METRICS.queue_depth = depth
+    checks = {"database": DB_REPOSITORY is not None, "redis": REDIS_STORE is not None, "opa": OPA is not None}
+    if DB_REPOSITORY is not None:
+        try:
+            with DB_REPOSITORY.sessions() as db: db.execute(__import__("sqlalchemy").text("SELECT 1"))
+        except Exception: checks["database"] = False
+    if REDIS_STORE is not None:
+        try: REDIS_STORE.client.ping()
+        except Exception: checks["redis"] = False
+    if OPA is not None:
+        try: OPA.decide({"type":"human","authenticated":True}, "api.access", {"monitoring":True})
+        except Exception: checks["opa"] = False
+    thresholds = {"cpu_percent": float(os.getenv("ALERT_CPU_PERCENT", "90")), "memory_percent": float(os.getenv("ALERT_MEMORY_PERCENT", "90")), "disk_percent": float(os.getenv("ALERT_DISK_PERCENT", "90"))}
+    alerts = [f"{key} threshold exceeded: {value}%" for key, value in state["host"].items() if value is not None and key in thresholds and value >= thresholds[key]]
+    alerts += [f"{key} unavailable" for key, healthy in checks.items() if not healthy and os.getenv("CRI_"+key.upper()+"_URL")]
+    if alerts: notify("CRI operational alert", "\n".join(alerts))
+    return {"host":state["host"],"dependencies":checks,"agents":state["agent_heartbeats"],"alerts":alerts}
+
 @app.get("/", response_class=HTMLResponse)
 def home():
     return """<!doctype html><html><meta name=viewport content='width=device-width'><title>CRI Control Plane</title><body style='font:16px system-ui;background:#101827;color:#eee;margin:2rem'><h1>CRI Control Plane</h1><p>Prototype status UI. Authenticate API requests with a Bearer admin token.</p><pre id='out'>Loading status…</pre><script>fetch('/api/status').then(r=>r.json()).then(x=>out.textContent=JSON.stringify(x,null,2)).catch(e=>out.textContent=String(e))</script></body></html>"""
+
+# Versioned REST aliases preserve the existing /api paths during migration.
+# WebSocket routes are intentionally excluded; /api/ws remains ticket-protected.
+for _route in tuple(app.routes):
+    _path = getattr(_route, "path", "")
+    _methods = getattr(_route, "methods", None)
+    _endpoint = getattr(_route, "endpoint", None)
+    if _path.startswith("/api/") and _methods and _endpoint is not None and _methods.intersection({"GET", "POST", "PUT", "PATCH", "DELETE"}):
+        app.add_api_route(
+            "/v1/" + _path[len("/api/"):],
+            _endpoint,
+            methods=sorted(_methods),
+            dependencies=getattr(_route, "dependencies", None),
+            response_model=getattr(_route, "response_model", None),
+            include_in_schema=True,
+        )

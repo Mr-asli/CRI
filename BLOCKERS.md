@@ -1,36 +1,24 @@
-# CRI deployment blockers and verification gates
+# CRI deployment blockers and prioritized issues
 
-| Area | Code in package | Local evidence | Required external verification / remaining work |
+This file records work that cannot honestly be marked complete from a source-only ZIP review. Priorities are ordered by security and deployment impact.
+
+| Priority | Issue | Current package evidence | Required completion / acceptance evidence |
 |---|---|---|---|
-| PostgreSQL / migrations | SQLAlchemy models, migrations 0001–0003, privileged migration runner, restricted runtime role | Repository SQLite tests; migration runner compile check | Run migrations against a disposable PostgreSQL 16 + pgvector instance and confirm role grants/trigger behavior in GitHub Actions and Railway |
-| PostgreSQL Audit | Stable hash event ID, idempotent replay, DB chain-link status | SQLite repository idempotency test | Verify live Railway row count, replay after DB outage, and hash chain against actual PostgreSQL rows |
-| Redis | TTL, bounded queue, heartbeat/state primitives; startup ping | Mock tests only | Verify Redis TLS/auth, persistence policy, queue consumer, retries, and failover on GitHub Actions/Railway |
-| OPA | HTTP client, fail-closed wrapper, Rego policies | Mock tests; YAML parse | Run OPA 1.x policy evaluation and API authorization tests; validate all action names and policy input schemas |
-| Remote/WORM Audit | HTTPS forwarder plus S3 Object Lock COMPLIANCE writer | Mock HTTP and S3 client tests | Provision bucket Object Lock/versioning, restrictive IAM, retention and tamper/immutability checks; mock tests do not establish WORM |
-| Developer Agent / Universal LLM Gateway | OpenAI-compatible, Gemini and Anthropic adapters; normalized response; bounded retry/timeout; configured fallback; model metadata; process-local cost accounting; metadata-only audit | Mock adapter, fallback, retry, cost and draft validation tests; 98 full-suite tests, 86% coverage | Live provider compatibility, pricing, quota, timeout and fallback verification; durable shared cost cap and periodic health scheduler remain required for multi-replica production |
-| Self-improvement | Approval-gated stage machine and persistent SQL primitives | Unit tests for stage/token workflow | Durable orchestration, trusted sandbox/test/security attestations, rejection/rollback, approval UX, and recovery need end-to-end integration |
-| Docker Sandbox | Docker CLI runner with digest pinning, no network, read-only rootfs, dropped capabilities and quotas | Fail-closed unit tests only | Run on a dedicated isolated runner; never mount Docker socket into API/agent container; validate cleanup, seccomp and escape resistance |
-| Host watchdog / Kill Switch | Host-side script and systemd unit templates | Syntax and mocked tests | Install on an independent Linux host, verify root-owned state path and API/agent cannot signal or alter host unit; Railway app container cannot provide this guarantee |
-| Dashboard | React source, REST and one-time-ticket WebSocket client, Nginx proxy, Dockerfile | Source inspection; npm install timed out | GitHub Actions must pass `npm ci`, lint, Vitest, TypeScript build and Docker image build; browser/mobile acceptance |
-| Railway | Railway TOML and backend Dockerfile | Config/source inspection only | Configure API, Dashboard, Postgres, Redis and OPA as separate services; set persistent volume and secrets; test health, migrations and rollback |
-| CI | Unit, integration, E2E and Dashboard jobs | Python 98 passed; 86% coverage; YAML/shell syntax passed in local review | Push branch and inspect actual GitHub Actions artifacts/logs; configure required CI secrets |
+| P0 | Data-driven Quota | Implemented in migration 0005 and API middleware for task creation, agent runs, and memory writes; owner identity is server-configured and decisions are audited. | Operator must assign real users to plans and validate policy values on the deployed database. Existing bearer-admin API is not a full multi-tenant identity provider. |
+| P0 | Independent sandbox worker | API sandbox runner is fail-closed but no independently operated worker service is deployed. | Separate host/VM or hardened runtime; no Docker socket in API; signed job envelope, resource caps, no network by default, cleanup, independent test attestations. |
+| P0 | Host watchdog / Overnight Lockdown | Host watchdog and systemd templates are archived as deployment references; not installed or verified on a real host. | Host administrator installation, root-owned state path, separate operator credentials, hang/violation tests, measured stop latency, recovery drill. |
+| P0 | WORM audit | Optional remote/S3 writer code exists; no bucket or external receiver can be proven from ZIP. | Provision Object Lock COMPLIANCE bucket, versioning, retention, deny-delete IAM, separate account, tamper test, and restore evidence. |
+| P1 | Durable worker queue / DAG | Orchestration code exists, but multi-process durable worker lifecycle, retries, dead-letter queue, crash recovery and full E2E evidence are incomplete. | Worker consumer service, persistent job state, idempotency, retry/backoff/DLQ, kill propagation, integration and chaos tests. |
+| P1 | Self-improvement evidence chain | Workflow and approval primitives exist; trusted sandbox/test/security attestations and complete rollback/promotion transaction are not verified end-to-end. | Bind signed attestations to immutable artifact digests, independent security results, expiring one-time approval, atomic promotion and tested rollback. |
+| P1 | Quota and multi-user auth | Current admin bearer model is not a multi-tenant user account system. | Add authenticated user identity and plan assignment before enabling quota; keep login/audit outside consumption quota. |
+| P1 | Monitoring and alerts | Request metrics, health endpoint, CPU/RAM/disk snapshots, dependency checks, and optional Telegram/SMTP notification code are implemented; dashboard Monitoring page consumes the endpoint. | Configure and verify alert credentials, real host/container metrics, queue exporter, notification delivery, and service-down alerting on the deployment host. |
+| P1 | HTTPS host integration | `Caddyfile.example` and deployment instructions are supplied; HTTPS has not been exercised against a real DNS name. | Install Caddy on host, verify Let's Encrypt issuance/renewal, security headers and reverse proxy routing. |
+| P1 | Backup/restore verification | Backup now writes SHA-256 sidecars, verifies archives, and prunes by retention count; restore validates checksum and requires explicit confirmation. | Execute the documented disposable-host restore drill and retain evidence. |
+| P1 | Environment validation | Startup validates required secrets, booleans, and monitoring thresholds; Compose passes quota/alert settings. | Verify production `.env` values and profile-specific secrets on target host. |
+| P1 | Full Compose E2E | Compose topology and CI test overlay are present; this environment has not run Docker Engine/Compose. | Run workflow on GitHub Actions or Linux Docker host and retain logs/artifacts. |
+| P2 | API contract/dashboard | `/v1` aliases preserve `/api` compatibility; browser/mobile acceptance and complete dashboard component library/RTL audit remain. | Run npm ci, lint, Vitest, TypeScript build, browser accessibility and Persian RTL checks. |
+| P2 | Supply chain | Python dependencies are pinned; npm lock exists. | Add Dependabot, pip-audit and npm audit gates with a reviewed exception process and immutable CI action pinning. |
 
-## Required secrets / variables
+## Operational warning
 
-- `CRI_ADMIN_TOKEN`: independent random value, at least 32 bytes.
-- `CRI_APPROVAL_SECRET`: independent random signing secret, at least 32 bytes.
-- `CRI_MIGRATION_DATABASE_URL`: privileged schema-owner connection; only required during migration startup and removed before Uvicorn starts.
-- `CRI_DATABASE_URL`: restricted `cri_app` runtime connection.
-- `CRI_APP_PASSWORD`: independent runtime-role password used by migration runner.
-- `CRI_REDIS_URL`: authenticated Redis connection.
-- `CRI_OPA_URL`: OPA policy endpoint.
-- `CRI_AUDIT_REMOTE_URL` / `CRI_AUDIT_REMOTE_TOKEN`: HTTPS append-only receiver credentials.
-- `CRI_LLM_BASE_URL` / `CRI_LLM_API_KEY` / `CRI_LLM_MODEL`: OpenAI-compatible provider configuration.
-- The infrastructure E2E smoke script seeds a task directly in PostgreSQL and does not require live LLM-provider credentials. Provider integration must be tested separately with explicit opt-in credentials.
-- `CRI_SANDBOX_IMAGE`: operator-approved image pinned by immutable SHA-256 digest.
-
-Do not put real secrets in the ZIP, Git history, screenshots, issue reports, or public repository files. Rotate any secret that has ever been committed to a public repository.
-
-## Non-negotiable deployment boundary
-
-The host watchdog is not independent until installed outside the application host/process boundary by an administrator. The API Kill Switch does not stop the Railway host. No Docker socket may be mounted into the API or agent container. Untrusted code execution and automatic promotion remain disabled until a separately operated sandbox and trusted evidence/approval chain have been verified.
+The install script creates local secrets and starts Compose. It does not install a host watchdog, provision a WORM bucket, establish a dedicated sandbox host, or configure DNS/TLS. Do not enable autonomous execution or public exposure until all P0 items and the relevant P1 items are closed with evidence.

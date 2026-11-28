@@ -20,6 +20,10 @@ class DeveloperUnavailable(RuntimeError):
 
 class Developer:
     def __init__(self, endpoint=None, api_key=None, model=None, timeout=60.0, opener=None, gateway=None, audit=None):
+        if gateway is None and os.getenv("LLM_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+            self.gateway = None
+            self.configuration_error = "LLM code generation is disabled by LLM_ENABLED"
+            return
         if gateway is not None:
             self.gateway = gateway
         else:

@@ -250,3 +250,23 @@ def test_memory_uses_redis_short_term_cache(monkeypatch, tmp_path):
         assert saved.status_code == 200
         second = client.get("/api/memory", headers=headers)
         assert second.json()[0]["text"] == "short term cache check"
+
+
+def test_versioned_api_alias_preserves_authentication(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    with TestClient(main.app) as client:
+        assert client.get('/v1/status').status_code == 200
+        assert client.get('/v1/audit/verify').status_code == 401
+        response = client.get('/v1/audit/verify', headers={'Authorization': 'Bearer ' + 'a' * 32})
+        assert response.status_code == 200
+        assert response.json()['valid'] is True
+
+
+def test_health_and_prometheus_endpoints_are_live(monkeypatch, tmp_path):
+    main = load_app(monkeypatch, tmp_path)
+    with TestClient(main.app) as client:
+        health = client.get('/healthz')
+        assert health.status_code == 200 and health.json()['status'] == 'ok'
+        metrics = client.get('/metrics')
+        assert metrics.status_code == 200
+        assert 'cri_http_requests_total' in metrics.text
