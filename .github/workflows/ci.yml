@@ -42,6 +42,7 @@ jobs:
       POSTGRES_PASSWORD: ci-only-postgres-password
       REDIS_PASSWORD: ci-only-redis-password
       CRI_ADMIN_TOKEN: ci-only-admin-token-not-for-production
+      CRI_APPROVAL_SECRET: ci-only-approval-secret-not-for-production
       CRI_APP_PASSWORD: ci-only-app-password
     steps:
       - uses: actions/checkout@v4
