@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate secrets
         run: test -n "$CRI_ADMIN_TOKEN" && test -n "$CRI_APPROVAL_SECRET"
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v6
         with:
           context: ./backend

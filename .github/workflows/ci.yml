@@ -46,7 +46,7 @@ jobs:
       CRI_APP_PASSWORD: ci-only-app-password
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - name: Start PostgreSQL/pgvector, Redis and OPA
         run: docker compose --profile test up -d test-postgres test-redis test-opa
       - name: Wait for infrastructure health
@@ -127,7 +127,7 @@ jobs:
       CRI_LLM_OUTPUT_COST_PER_MILLION: ${{ vars.CRI_LLM_OUTPUT_COST_PER_MILLION }}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - name: Validate required secrets and LLM configuration
         shell: bash
         run: |
